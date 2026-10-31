@@ -1,0 +1,149 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Личный кабинет — My Library</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/account.css">
+</head>
+<body class="profile-page">
+    <header class="profile-header">
+        <a class="account-brand" href="/">L · MY LIBRARY</a>
+        <div class="profile-nav">
+            <a href="/">Библиотека</a>
+            <a href="/logout">Выйти ↗</a>
+        </div>
+    </header>
+
+    <main class="profile-main">
+        <section class="profile-welcome">
+            <div class="profile-avatar">
+                {{ user.username[:1]|upper }}
+            </div>
+
+            <div>
+                <p class="eyebrow">ЛИЧНЫЙ КАБИНЕТ</p>
+                <h1>Привет, {{ user.username }}!</h1>
+                <p class="account-muted">{{ user.email }}</p>
+            </div>
+        </section>
+
+        <section class="profile-stats">
+            <article>
+                <span>❤️</span>
+                <strong>{{ favorites|length }}</strong>
+                <small>Избранных книг</small>
+            </article>
+
+            <article>
+                <span>📖</span>
+                <strong>{{ progress|length }}</strong>
+                <small>Книг в истории</small>
+            </article>
+
+            <article>
+                <span>⭐</span>
+                <strong>{{ reviews|length }}</strong>
+                <small>Моих отзывов</small>
+            </article>
+        </section>
+
+        <section class="profile-section">
+            <div class="section-head">
+                <div>
+                    <p class="eyebrow">ВАША КОЛЛЕКЦИЯ</p>
+                    <h2>Избранное ❤️</h2>
+                </div>
+            </div>
+
+            <div class="profile-book-grid">
+                {% for book in favorites %}
+                <article class="profile-book">
+                    <a href="/read/{{ book.id }}" class="profile-book-cover">
+                        {% if book.cover %}
+                        <img src="{{ book.cover }}" alt="{{ book.title }}">
+                        {% else %}
+                        <span>{{ book.title }}</span>
+                        {% endif %}
+                    </a>
+
+                    <strong>{{ book.title }}</strong>
+                    <small>{{ book.author }}</small>
+
+                    {% if book.file %}
+                    <a href="/read/{{ book.id }}" class="profile-read">
+                        Читать ↗
+                    </a>
+                    {% endif %}
+                </article>
+                {% else %}
+                <p class="empty-profile">
+                    Здесь пока нет избранных книг.
+                    Добавляйте их нажатием на сердечко в каталоге.
+                </p>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="profile-section">
+            <div class="section-head">
+                <div>
+                    <p class="eyebrow">ВАШ ПРОГРЕСС</p>
+                    <h2>Продолжить чтение</h2>
+                </div>
+            </div>
+
+            <div class="progress-list">
+                {% for item in progress %}
+                <article class="progress-item">
+                    <div>
+                        <strong>{{ item.book.title }}</strong>
+                        <small>{{ item.book.author }}</small>
+                    </div>
+
+                    <div class="progress-track">
+                        <span style="width:{{ item.percent }}%"></span>
+                    </div>
+
+                    <span class="progress-value">{{ item.percent }}%</span>
+
+                    <a href="/read/{{ item.book.id }}">Продолжить →</a>
+                </article>
+                {% else %}
+                <p class="empty-profile">
+                    Вы ещё не начали читать книги с сохранением прогресса.
+                </p>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="profile-section">
+            <p class="eyebrow">ВАШЕ МНЕНИЕ</p>
+            <h2>Мои отзывы</h2>
+
+            <div class="review-list">
+                {% for review in reviews %}
+                <article class="profile-review">
+                    <strong>{{ review.book_title }}</strong>
+                    <div class="review-stars">
+                        {{ "★" * review.rating }}{{ "☆" * (5 - review.rating) }}
+                    </div>
+                    <p>{{ review.text }}</p>
+                </article>
+                {% else %}
+                <p class="empty-profile">
+                    Вы пока не оставляли отзывы.
+                </p>
+                {% endfor %}
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <span>MY LIBRARY</span>
+        <span>Ваша история чтения.</span>
+    </footer>
+</body>
+</html>

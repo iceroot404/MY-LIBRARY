@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Вход — Library Admin</title>
+    <link rel="stylesheet" href="/static/css/admin.css">
+</head>
+<body class="login-page">
+    <div class="login-card">
+        <div class="brand-mark">L</div>
+
+        <p class="eyebrow">LIBRARY CONTROL</p>
+        <h1>С возвращением</h1>
+
+        <p class="muted">
+            Войдите, чтобы управлять библиотекой.
+        </p>
+
+        {% if error %}
+        <div class="error">{{ error }}</div>
+        {% endif %}
+
+        <form method="post" action="/admin/login">
+            <label>Пароль администратора</label>
+            <input
+                type="password"
+                name="password"
+                placeholder="Введите пароль"
+                required
+                autofocus
+            >
+
+            <button class="primary full">
+                Войти в панель <span>→</span>
+            </button>
+        </form>
+
+        <a class="back-link" href="/">
+            ← На главную
+        </a>
+    </div>
+</body>
+</html>

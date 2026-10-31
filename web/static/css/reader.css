@@ -1,0 +1,227 @@
+
+.reader-page {
+    height: 100vh;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--page);
+    color: var(--ink);
+}
+
+.reader-topbar {
+    min-height: 72px;
+    flex: 0 0 72px;
+    display: grid;
+    grid-template-columns: 1fr minmax(100px, 2fr) 1fr;
+    align-items: center;
+    gap: 18px;
+    padding: 0 clamp(16px, 4vw, 48px);
+    background: #1d3029;
+    color: #fff;
+    box-shadow: 0 5px 20px #10201820;
+    z-index: 2;
+}
+
+.reader-back,
+.reader-download {
+    color: #e4eae5;
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.reader-back:hover,
+.reader-download:hover {
+    color: #e2ca94;
+}
+
+.reader-book-title {
+    text-align: center;
+    min-width: 0;
+}
+
+.reader-book-title strong,
+.reader-book-title span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.reader-book-title strong {
+    font: 600 15px 'Playfair Display', Georgia, serif;
+}
+
+.reader-book-title span {
+    font-size: 10px;
+    color: #aabbb0;
+    margin-top: 2px;
+}
+
+.reader-actions {
+    display: flex;
+    justify-content: end;
+    gap: 8px;
+    align-items: center;
+}
+
+.reader-actions select {
+    max-width: 100px;
+    padding: 8px;
+    border: 1px solid #ffffff40;
+    border-radius: 20px;
+    background: #ffffff12;
+    color: white;
+    font-size: 10px;
+}
+
+.reader-actions option {
+    background: #fff;
+    color: #222;
+}
+
+.reader-download {
+    justify-self: end;
+    border: 1px solid #ffffff40;
+    border-radius: 30px;
+    padding: 9px 14px;
+}
+
+.reader-shell {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    justify-content: center;
+    align-items: stretch;
+    padding: 20px clamp(10px, 3vw, 36px);
+}
+
+.pdf-frame {
+    width: min(1100px, 100%);
+    height: 100%;
+    border: 0;
+    border-radius: 8px;
+    background: #555;
+    box-shadow: 0 12px 38px #1b2c241c;
+}
+
+.text-reader-wrap {
+    width: min(850px, 100%);
+    height: 100%;
+    overflow: auto;
+    padding: clamp(22px, 5vw, 60px);
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: 0 12px 38px #1b2c2412;
+}
+
+.reader-format {
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    font-weight: 700;
+}
+
+.text-reader {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font: 16px/1.9 Georgia, serif;
+    color: var(--ink);
+    margin: 24px 0 0;
+}
+
+.epub-reader-wrap {
+    width: min(1100px, 100%);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: 0 12px 38px #1b2c2412;
+}
+
+.epub-toolbar {
+    height: 56px;
+    flex: 0 0 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 18px;
+    border-bottom: 1px solid var(--line);
+}
+
+.epub-toolbar button {
+    border: 0;
+    border-radius: 7px;
+    padding: 9px 13px;
+    background: var(--green);
+    color: #fff;
+    font: 600 11px 'DM Sans', sans-serif;
+    cursor: pointer;
+}
+
+.epub-toolbar span {
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.epub-viewer {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    overflow: hidden;
+}
+
+@media (max-width: 600px) {
+    .reader-topbar {
+        min-height: 64px;
+        flex-basis: 64px;
+        grid-template-columns: auto 1fr auto;
+        gap: 9px;
+        padding: 0 12px;
+    }
+
+    .reader-back span {
+        display: none;
+    }
+
+    .reader-book-title strong {
+        font-size: 12px;
+    }
+
+    .reader-download {
+        font-size: 10px;
+        padding: 8px 10px;
+    }
+
+    .reader-actions select {
+        max-width: 75px;
+        font-size: 9px;
+    }
+
+    .reader-shell {
+        padding: 9px;
+    }
+
+    .text-reader-wrap {
+        padding: 22px;
+    }
+
+    .text-reader {
+        font-size: 15px;
+    }
+
+    .epub-toolbar {
+        padding: 0 8px;
+    }
+
+    .epub-toolbar button {
+        padding: 8px;
+        font-size: 10px;
+    }
+}

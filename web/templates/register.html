@@ -1,0 +1,67 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Регистрация — My Library</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/account.css">
+</head>
+<body class="account-page">
+    <main class="account-card">
+        <a href="/" class="account-brand">L · MY LIBRARY</a>
+
+        <p class="eyebrow">СОЗДАНИЕ АККАУНТА</p>
+        <h1>Присоединяйтесь к библиотеке</h1>
+        <p class="account-muted">Создайте аккаунт и сохраняйте любимые книги.</p>
+
+        {% if error %}
+        <div class="account-error">{{ error }}</div>
+        {% endif %}
+
+        <form method="post" action="/register">
+            <label>Имя пользователя</label>
+            <input
+                type="text"
+                name="username"
+                minlength="3"
+                maxlength="40"
+                required
+                autocomplete="username"
+                placeholder="Ваше имя"
+            >
+
+            <label>Email</label>
+            <input
+                type="email"
+                name="email"
+                required
+                autocomplete="email"
+                placeholder="example@mail.com"
+            >
+
+            <label>Пароль</label>
+            <input
+                type="password"
+                name="password"
+                minlength="8"
+                required
+                autocomplete="new-password"
+                placeholder="Минимум 8 символов"
+            >
+
+            <button class="account-submit" type="submit">
+                Создать аккаунт →
+            </button>
+        </form>
+
+        <p class="account-switch">
+            Уже есть аккаунт?
+            <a href="/login">Войти</a>
+        </p>
+
+        <a href="/" class="account-back">← Вернуться в библиотеку</a>
+    </main>
+</body>
+</html>

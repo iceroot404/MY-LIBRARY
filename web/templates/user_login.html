@@ -1,0 +1,55 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Вход — My Library</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/account.css">
+</head>
+<body class="account-page">
+    <main class="account-card">
+        <a href="/" class="account-brand">L · MY LIBRARY</a>
+
+        <p class="eyebrow">ЛИЧНЫЙ КАБИНЕТ</p>
+        <h1>С возвращением!</h1>
+        <p class="account-muted">Войдите, чтобы продолжить чтение.</p>
+
+        {% if error %}
+        <div class="account-error">{{ error }}</div>
+        {% endif %}
+
+        <form method="post" action="/login">
+            <label>Email</label>
+            <input
+                type="email"
+                name="email"
+                required
+                autocomplete="email"
+                placeholder="example@mail.com"
+            >
+
+            <label>Пароль</label>
+            <input
+                type="password"
+                name="password"
+                required
+                autocomplete="current-password"
+                placeholder="Ваш пароль"
+            >
+
+            <button class="account-submit" type="submit">
+                Войти в аккаунт →
+            </button>
+        </form>
+
+        <p class="account-switch">
+            Ещё нет аккаунта?
+            <a href="/register">Регистрация</a>
+        </p>
+
+        <a href="/" class="account-back">← Вернуться в библиотеку</a>
+    </main>
+</body>
+</html>

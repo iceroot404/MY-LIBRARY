@@ -1,0 +1,74 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ book.title }} — My Library</title>
+
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/reader.css">
+</head>
+<body class="reader-page">
+    <header class="reader-topbar">
+        <a class="reader-back" href="/">← <span>К библиотеке</span></a>
+
+        <div class="reader-book-title">
+            <strong>{{ book.title }}</strong>
+            <span>{{ book.author }}</span>
+        </div>
+
+        <div class="reader-actions">
+            <select id="reader-theme" aria-label="Тема читалки">
+                <option value="light">Светлая</option>
+                <option value="dark">Тёмная</option>
+                <option value="sepia">Sepia</option>
+            </select>
+
+            <a class="reader-download" href="/download/{{ book.id }}">
+                Скачать ↓
+            </a>
+        </div>
+    </header>
+
+    <main
+        id="reader"
+        class="reader-shell"
+        data-book-id="{{ book.id }}"
+        data-format="{{ file_format }}"
+        data-file-url="{{ file_url }}"
+        data-logged-in="{{ 'true' if logged_in else 'false' }}"
+    >
+        {% if file_format == "pdf" %}
+        <iframe
+            class="pdf-frame"
+            src="{{ file_url }}#toolbar=1&navpanes=0"
+            title="{{ book.title }}"
+        ></iframe>
+
+        {% elif file_format == "txt" %}
+        <article class="text-reader-wrap">
+            <p class="reader-format">ТЕКСТОВАЯ ВЕРСИЯ</p>
+            <pre id="text-content" class="text-reader">Загружаем текст книги…</pre>
+        </article>
+
+        {% elif file_format == "epub" %}
+        <section class="epub-reader-wrap">
+            <div class="epub-toolbar">
+                <button id="prev-page" type="button">← Назад</button>
+                <span id="epub-status">Загружаем книгу…</span>
+                <button id="next-page" type="button">Вперёд →</button>
+            </div>
+
+            <div id="epub-viewer" class="epub-viewer"></div>
+        </section>
+        {% endif %}
+    </main>
+
+    {% if file_format == "epub" %}
+    <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
+    {% endif %}
+
+    <script src="/static/js/reader.js"></script>
+</body>
+</html>

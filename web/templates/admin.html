@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Админ-панель — My Library</title>
+    <link rel="stylesheet" href="/static/css/admin.css">
+</head>
+<body class="admin-page">
+    <aside class="sidebar">
+        <a class="brand" href="/admin">
+            <span class="brand-mark">L</span>
+            <span>
+                MY LIBRARY
+                <small>CONTROL CENTER</small>
+            </span>
+        </a>
+
+        <div class="side-label">РАБОЧЕЕ ПРОСТРАНСТВО</div>
+
+        <a class="nav active" href="/admin">
+            ▦ <span>Обзор библиотеки</span>
+        </a>
+
+        <a class="nav" href="/">
+            ↗ <span>Открыть сайт</span>
+        </a>
+
+        <div class="sidebar-bottom">
+            <div class="online-dot"></div>
+            <span>Система активна</span>
+
+            <form method="post" action="/admin/logout">
+                <button class="logout">Выйти ↗</button>
+            </form>
+        </div>
+    </aside>
+
+    <main class="dashboard">
+        <header class="topbar">
+            <div>
+                <p class="eyebrow">ПАНЕЛЬ УПРАВЛЕНИЯ / ОБЗОР</p>
+                <h1>Добро пожаловать 👋</h1>
+                <p class="muted">
+                    Здесь можно управлять каталогом вашей библиотеки.
+                </p>
+            </div>
+
+            <div class="avatar">A</div>
+        </header>
+
+        <section class="stats">
+            <article class="stat-card">
+                <div class="stat-icon violet">▤</div>
+                <p>Всего книг</p>
+                <strong>{{ total }}</strong>
+                <small>В каталоге библиотеки</small>
+            </article>
+
+            <article class="stat-card">
+                <div class="stat-icon mint">⌗</div>
+                <p>Категории</p>
+                <strong>{{ categories }}</strong>
+                <small>Разделов каталога</small>
+            </article>
+
+            <article class="stat-card">
+                <div class="stat-icon amber">◉</div>
+                <p>Статус</p>
+                <strong class="status-text">Online</strong>
+                <small>
+                    <i class="online-dot"></i>
+                    Сайт работает
+                </small>
+            </article>
+        </section>
+
+        <section class="content-grid">
+            <article class="panel add-panel">
+                <div class="panel-heading">
+                    <div>
+                        <p class="eyebrow">НОВАЯ ЗАПИСЬ</p>
+                        <h2>Добавить книгу</h2>
+                    </div>
+                    <span class="plus">＋</span>
+                </div>
+
+                <form
+                    action="/admin/books"
+                    method="post"
+                    enctype="multipart/form-data"
+                    class="book-form"
+                >
+                    <div class="field">
+                        <label>Название книги *</label>
+                        <input
+                            name="title"
+                            placeholder="Например, Мастер и Маргарита"
+                            required
+                            maxlength="255"
+                        >
+                    </div>
+
+                    <div class="field">
+                        <label>Автор *</label>
+                        <input
+                            name="author"
+                            placeholder="Имя автора"
+                            required
+                            maxlength="255"
+                        >
+                    </div>
+
+                    <div class="field">
+                        <label>Категория</label>
+                        <input
+                            name="category"
+                            placeholder="Классика"
+                            value="Разное"
+                            maxlength="100"
+                        >
+                    </div>
+
+                    <div class="field">
+                        <label>Описание</label>
+                        <textarea
+                            name="description"
+                            rows="4"
+                            placeholder="Краткое описание книги..."
+                        ></textarea>
+                    </div>
+
+                    <div class="upload-row">
+                        <label class="upload-box">
+                            ▧
+                            <span>Обложка</span>
+                            <small>JPG, PNG, WEBP</small>
+                            <input
+                                type="file"
+                                name="cover"
+                                accept=".jpg,.jpeg,.png,.webp"
+                            >
+                        </label>
+
+                        <label class="upload-box">
+                            ⇧
+                            <span>Файл книги</span>
+                            <small>PDF, EPUB, FB2, DJVU, TXT</small>
+                            <input
+                                type="file"
+                                name="book_file"
+                                accept=".pdf,.epub,.fb2,.djvu,.txt"
+                            >
+                        </label>
+                    </div>
+
+                    <button class="primary">
+                        Добавить в библиотеку <span>→</span>
+                    </button>
+                </form>
+            </article>
+
+            <article class="panel list-panel">
+                <div class="panel-heading">
+                    <div>
+                        <p class="eyebrow">КАТАЛОГ</p>
+                        <h2>Последние книги</h2>
+                    </div>
+
+                    <span class="count-pill">
+                        {{ books|length }} / 100
+                    </span>
+                </div>
+
+                <div class="book-list">
+                    {% for book in books %}
+                    <div class="book-row">
+                        <div class="book-thumb">
+                            {% if book.cover %}
+                            <img
+                                src="/static/uploads/{{ book.cover }}"
+                                alt=""
+                            >
+                            {% else %}
+                            <span>▤</span>
+                            {% endif %}
+                        </div>
+
+                        <div class="book-info">
+                            <strong>{{ book.title }}</strong>
+                            <span>
+                                {{ book.author }} · {{ book.category }}
+                            </span>
+                            <small>ID #{{ book.id }}</small>
+                        </div>
+
+                        <form
+                            method="post"
+                            action="/admin/books/{{ book.id }}/delete"
+                            onsubmit="return confirm('Удалить книгу «{{ book.title|e }}»?')"
+                        >
+                            <button class="delete-btn" title="Удалить">
+                                ⌫
+                            </button>
+                        </form>
+                    </div>
+                    {% else %}
+                    <div class="empty-state">
+                        Пока нет книг. Добавьте первую запись.
+                    </div>
+                    {% endfor %}
+                </div>
+            </article>
+        </section>
+
+        <footer>
+            MY LIBRARY <span>•</span> ADMIN CONSOLE
+        </footer>
+    </main>
+
+    <script>
+        document.querySelectorAll('input[type="file"]').forEach((input) => {
+            input.addEventListener("change", () => {
+                const label = input.closest(".upload-box");
+                const small = label.querySelector("small");
+
+                small.textContent =
+                    input.files[0]?.name ||
+                    small.dataset.original ||
+                    "Файл не выбран";
+            });
+        });
+    </script>
+</body>
+</html>

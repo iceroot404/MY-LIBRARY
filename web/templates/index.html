@@ -1,0 +1,179 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>My Library — ваша цифровая библиотека</title>
+
+    <meta name="theme-color" content="#1d3029">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="/static/css/style.css?v=3">
+</head>
+
+<body>
+
+    <header class="hero">
+
+        <nav class="nav-wrap">
+
+            <a class="site-brand" href="/">
+                <span class="brand-mark">L</span>
+                MY LIBRARY
+            </a>
+
+            <div class="nav-actions">
+
+                <!-- Выбор темы -->
+                <div class="theme-switcher">
+
+                    <button
+                        type="button"
+                        class="theme-btn"
+                        data-theme-choice="light"
+                        title="Светлая тема"
+                        aria-label="Светлая тема"
+                    >☀</button>
+
+                    <button
+                        type="button"
+                        class="theme-btn"
+                        data-theme-choice="dark"
+                        title="Тёмная тема"
+                        aria-label="Тёмная тема"
+                    >🌙</button>
+
+                    <button
+                        type="button"
+                        class="theme-btn"
+                        data-theme-choice="sepia"
+                        title="Тёплая тема"
+                        aria-label="Тёплая тема"
+                    >☕</button>
+
+                </div>
+
+                <!-- Авторизация -->
+                {% if logged_in %}
+
+                    <a class="nav-auth nav-login" href="/profile">
+                        Мой кабинет
+                    </a>
+
+                    <a class="nav-auth nav-register" href="/logout">
+                        Выйти ↗
+                    </a>
+
+                {% else %}
+
+                    <a class="nav-auth nav-login" href="/login">
+                        Войти
+                    </a>
+
+                    <a class="nav-auth nav-register" href="/register">
+                        Регистрация →
+                    </a>
+
+                {% endif %}
+
+                <a class="admin-link" href="/admin/login">
+                    Администратор ↗
+                </a>
+
+            </div>
+
+        </nav>
+
+        <div class="hero-content">
+
+            <p class="eyebrow">
+                ВАША КОЛЛЕКЦИЯ ЗНАНИЙ
+            </p>
+
+            <h1>
+                Истории, которые<br>
+                <em>остаются с вами.</em>
+            </h1>
+
+            <p class="hero-sub">
+                Откройте для себя следующую любимую книгу.
+            </p>
+
+            <label class="search">
+                <span>⌕</span>
+
+                <input
+                    id="q"
+                    type="search"
+                    placeholder="Поиск по названию, автору или жанру..."
+                    autocomplete="off"
+                >
+            </label>
+
+            <div
+                id="filters"
+                class="filters"
+                role="group"
+                aria-label="Категории"
+            ></div>
+
+        </div>
+
+        <div class="hero-orb"></div>
+
+    </header>
+
+    <main class="wrap">
+
+        <div class="section-head">
+
+            <div>
+                <p class="eyebrow">КНИЖНАЯ ПОЛКА</p>
+                <h2>Исследуйте библиотеку</h2>
+            </div>
+
+            <p id="count" class="count" aria-live="polite"></p>
+
+        </div>
+
+        <section
+            id="grid"
+            class="grid"
+            aria-label="Книжная библиотека"
+        ></section>
+
+        <p id="empty" class="empty" hidden>
+            Ничего не найдено.
+            Попробуйте изменить поисковый запрос.
+        </p>
+
+    </main>
+
+    <dialog id="modal">
+
+        <button
+            class="close"
+            id="close"
+            type="button"
+            aria-label="Закрыть"
+        >×</button>
+
+        <div id="modal-body"></div>
+
+    </dialog>
+
+    <footer class="site-footer">
+        <span>MY LIBRARY</span>
+        <span>Место для хороших историй.</span>
+    </footer>
+
+    <script src="/static/js/app.js?v=3"></script>
+
+</body>
+</html>

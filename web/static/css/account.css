@@ -1,0 +1,317 @@
+
+.account-page,
+.profile-page {
+    min-height: 100vh;
+    background: var(--page);
+    color: var(--ink);
+}
+
+.account-page {
+    display: grid;
+    place-items: center;
+    padding: 24px;
+}
+
+.account-card {
+    width: min(450px, 100%);
+    padding: 38px;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    background: var(--card);
+    box-shadow: 0 20px 70px #00000010;
+    animation: appear .45s both;
+}
+
+.account-brand {
+    display: inline-block;
+    color: var(--green);
+    font-weight: 800;
+    letter-spacing: 2px;
+    text-decoration: none;
+    margin-bottom: 35px;
+}
+
+.account-card .eyebrow {
+    color: var(--muted);
+}
+
+.account-card h1,
+.profile-welcome h1 {
+    font: 700 30px/1.2 'Playfair Display', serif;
+}
+
+.account-muted {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.account-card form {
+    margin-top: 25px;
+}
+
+.account-card label {
+    display: block;
+    margin: 14px 0 7px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.account-card input {
+    display: block;
+    width: 100%;
+    padding: 13px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: var(--page);
+    color: var(--ink);
+}
+
+.account-submit {
+    width: 100%;
+    margin-top: 22px;
+    padding: 14px;
+    border: 0;
+    border-radius: 9px;
+    background: var(--green);
+    color: white;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform .2s;
+}
+
+.account-submit:hover {
+    transform: translateY(-2px);
+}
+
+.account-error {
+    padding: 12px;
+    border-radius: 8px;
+    background: #fff0f0;
+    color: #c24e55;
+    font-size: 12px;
+}
+
+.account-switch,
+.account-back {
+    display: block;
+    text-align: center;
+    margin-top: 22px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.account-switch a {
+    color: var(--green);
+    font-weight: 700;
+}
+
+.account-back {
+    text-decoration: none;
+}
+
+/* Личный кабинет */
+
+.profile-header {
+    min-height: 74px;
+    padding: 12px max(24px, calc((100% - 1140px) / 2));
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--card);
+    border-bottom: 1px solid var(--line);
+}
+
+.profile-header .account-brand {
+    margin: 0;
+}
+
+.profile-nav {
+    display: flex;
+    gap: 20px;
+}
+
+.profile-nav a {
+    color: var(--green);
+    text-decoration: none;
+    font-size: 12px;
+}
+
+.profile-main {
+    max-width: 1140px;
+    padding: 45px 24px;
+    margin: auto;
+}
+
+.profile-welcome {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.profile-welcome h1 {
+    margin: 0;
+}
+
+.profile-avatar {
+    width: 68px;
+    height: 68px;
+    flex: 0 0 68px;
+    border-radius: 20px;
+    display: grid;
+    place-items: center;
+    background: var(--green);
+    color: white;
+    font-size: 27px;
+    font-weight: 700;
+}
+
+.profile-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin: 30px 0 55px;
+}
+
+.profile-stats article {
+    display: grid;
+    gap: 5px;
+    padding: 20px;
+    border: 1px solid var(--line);
+    border-radius: 13px;
+    background: var(--card);
+}
+
+.profile-stats strong {
+    font-size: 25px;
+}
+
+.profile-stats small {
+    color: var(--muted);
+}
+
+.profile-section {
+    margin: 45px 0;
+}
+
+.profile-section h2 {
+    font: 700 25px 'Playfair Display', serif;
+    margin: 0 0 20px;
+}
+
+.profile-book-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+    gap: 22px;
+}
+
+.profile-book {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    font-size: 12px;
+}
+
+.profile-book-cover {
+    display: block;
+    aspect-ratio: 2 / 3;
+    overflow: hidden;
+    border-radius: 8px;
+    background: var(--line);
+    color: var(--ink);
+}
+
+.profile-book-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.profile-book-cover span {
+    display: block;
+    padding: 15px;
+}
+
+.profile-book small {
+    color: var(--muted);
+}
+
+.profile-read,
+.progress-item a {
+    color: var(--green);
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.progress-list {
+    display: grid;
+    gap: 15px;
+}
+
+.progress-item {
+    display: grid;
+    grid-template-columns: 1.5fr 2fr 50px auto;
+    gap: 15px;
+    align-items: center;
+    padding: 17px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    font-size: 12px;
+}
+
+.progress-item small {
+    display: block;
+    color: var(--muted);
+    margin-top: 4px;
+}
+
+.progress-track {
+    height: 7px;
+    background: var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.progress-track span {
+    height: 100%;
+    display: block;
+    background: var(--green);
+}
+
+.progress-value {
+    color: var(--muted);
+}
+
+.profile-review {
+    padding: 15px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 13px;
+}
+
+.review-stars {
+    color: #c49745;
+    margin-top: 5px;
+}
+
+.empty-profile {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+@media (max-width: 650px) {
+    .account-card {
+        padding: 25px;
+    }
+
+    .profile-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .progress-item {
+        grid-template-columns: 1fr auto;
+    }
+
+    .progress-track {
+        grid-column: 1 / -1;
+    }
+}
