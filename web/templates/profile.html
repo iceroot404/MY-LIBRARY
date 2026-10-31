@@ -7,6 +7,11 @@
     <title>Личный кабинет — My Library</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <link rel="stylesheet" href="/static/css/account.css">
+<style>
+.notification-card{margin:15px 0;padding:18px;border:1px solid #ddd;border-radius:12px}
+.notification-count{background:#416d58;color:white;padding:3px 9px;border-radius:20px}
+.notification-read-button{padding:8px 12px;border:0;border-radius:8px;cursor:pointer}
+</style>
 </head>
 <body class="profile-page">
     <header class="profile-header">
@@ -30,7 +35,38 @@
             </div>
         </section>
 
-        <section class="profile-stats">
+        
+        <section class="profile-section notifications-section">
+            <p class="eyebrow">ВАЖНЫЕ СООБЩЕНИЯ</p>
+            <h2>Уведомления 🔔
+                {% if unread_notifications %}
+                <span class="notification-count">{{ unread_notifications }}</span>
+                {% endif %}
+            </h2>
+            {% for notification in notifications %}
+            <article class="profile-review notification-card">
+                <strong>{{ notification.title }}</strong>
+                <p>{{ notification.message }}</p>
+                {% if notification.book_id %}
+                <a class="profile-read" href="/read/{{ notification.book_id }}">
+                    Читать книгу →
+                </a>
+                {% endif %}
+                {% if not notification.is_read %}
+                <form method="post"
+                      action="/notifications/{{ notification.id }}/read">
+                    <button class="notification-read-button">
+                        Отметить прочитанным
+                    </button>
+                </form>
+                {% endif %}
+            </article>
+            {% else %}
+            <p class="empty-profile">Пока уведомлений нет.</p>
+            {% endfor %}
+        </section>
+
+<section class="profile-stats">
             <article>
                 <span>❤️</span>
                 <strong>{{ favorites|length }}</strong>

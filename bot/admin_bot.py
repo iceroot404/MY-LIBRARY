@@ -20,7 +20,7 @@ from aiogram.types import (
 
 from .config import ADMIN_ID, BOT_TOKEN, UPLOADS_DIR
 from .database import SessionLocal
-from .models import Book
+from .models import Book, BookRequest, UserNotification
 
 
 router = Router()
@@ -613,6 +613,194 @@ async def back_to_panel(callback: CallbackQuery):
             reply_markup=panel_keyboard(),
             parse_mode="HTML"
         )
+
+
+
+# =========================
+# УПРАВЛЕНИЕ ЗАКАЗАМИ КНИГ
+# =========================
+
+def order_keyboard(order_id: int, status: str = "pending"):
+    if status == "pending":
+        buttons = [
+            [
+                InlineKeyboardButton(
+                    text="✅ Принять заказ",
+                    callback_data=f"order:accept:{order_id}",
+                ),
+                InlineKeyboardButton(
+                    text="❌ Отклонить",
+                    callback_data=f"order:reject:{order_id}",
+                ),
+            ]
+        ]
+    elif status == "accepted":
+        buttons = [
+            [
+                InlineKeyboardButton(
+                    text="📚 Выполнен заказ",
+                    callback_data=f"order:done:{order_id}",
+                )
+            ]
+        ]
+    else:
+        buttons = []
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def save_order_notification(db, order, title, message, book_id=None):
+    if not order.user_id:
+        return
+
+    db.add(UserNotification(
+        user_id=order.user_id,
+        title=title,
+        message=message,
+        book_id=book_id,
+    ))
+
+
+@router.callback_query(F.data.startswith("order:accept:"))
+async def order_accept_callback(callback: CallbackQuery):
+    try:
+        order_id = int(callback.data.rsplit(":", 1)[1])
+    except (ValueError, AttributeError):
+        return await callback.answer("Неверный номер заказа", show_alert=True)
+
+    with SessionLocal() as db:
+        order = db.get(BookRequest, order_id)
+
+        if not order:
+            return await callback.answer("Заказ не найден", show_alert=True)
+
+        if order.status != "pending":
+            return await callback.answer(
+                "Этот заказ уже обработан", show_alert=True
+            )
+
+        order.status = "accepted"
+
+        save_order_notification(
+            db,
+            order,
+            "✅ Ваш заказ принят!",
+            (
+                f"Заказ «{order.book_title}» принят. "
+                "Мы сообщим вам, когда книга появится в библиотеке."
+            ),
+        )
+        db.commit()
+
+    if callback.message:
+        await callback.message.edit_reply_markup(
+            reply_markup=order_keyboard(order_id, "accepted")
+        )
+
+    await callback.answer("Заказ принят!")
+
+    if callback.message:
+        await callback.message.answer(
+            f"✅ Заказ №{order_id} принят. "
+            "После добавления книги нажмите «Выполнен заказ»."
+        )
+
+
+@router.callback_query(F.data.startswith("order:reject:"))
+async def order_reject_callback(callback: CallbackQuery):
+    try:
+        order_id = int(callback.data.rsplit(":", 1)[1])
+    except (ValueError, AttributeError):
+        return await callback.answer("Неверный номер заказа", show_alert=True)
+
+    with SessionLocal() as db:
+        order = db.get(BookRequest, order_id)
+
+        if not order:
+            return await callback.answer("Заказ не найден", show_alert=True)
+
+        if order.status != "pending":
+            return await callback.answer(
+                "Этот заказ уже обработан", show_alert=True
+            )
+
+        order.status = "rejected"
+
+        save_order_notification(
+            db,
+            order,
+            "Заказ отклонён",
+            f"К сожалению, заказ «{order.book_title}» не может быть выполнен.",
+        )
+        db.commit()
+
+    if callback.message:
+        await callback.message.edit_reply_markup(reply_markup=None)
+        await callback.message.answer(
+            f"❌ Заказ №{order_id} отклонён."
+        )
+
+    await callback.answer("Заказ отклонён")
+
+
+@router.callback_query(F.data.startswith("order:done:"))
+async def order_done_callback(callback: CallbackQuery):
+    try:
+        order_id = int(callback.data.rsplit(":", 1)[1])
+    except (ValueError, AttributeError):
+        return await callback.answer("Неверный номер заказа", show_alert=True)
+
+    with SessionLocal() as db:
+        order = db.get(BookRequest, order_id)
+
+        if not order:
+            return await callback.answer("Заказ не найден", show_alert=True)
+
+        if order.status == "completed":
+            return await callback.answer(
+                "Этот заказ уже выполнен", show_alert=True
+            )
+
+        if order.status != "accepted":
+            return await callback.answer(
+                "Сначала прими заказ", show_alert=True
+            )
+
+        if not order.book_id:
+            return await callback.answer(
+                "Сначала добавь книгу на сайте и свяжи её с этим заказом.",
+                show_alert=True,
+            )
+
+        book = db.get(Book, order.book_id)
+
+        if not book:
+            return await callback.answer(
+                "Связанная книга не найдена", show_alert=True
+            )
+
+        order.status = "completed"
+
+        save_order_notification(
+            db,
+            order,
+            "📚 Ваша заказанная книга добавлена!",
+            (
+                f"Книга «{book.title}» появилась в My Library. "
+                "Теперь вы можете начать чтение."
+            ),
+            book_id=book.id,
+        )
+        db.commit()
+
+    if callback.message:
+        await callback.message.edit_reply_markup(reply_markup=None)
+        await callback.message.answer(
+            f"🎉 Заказ №{order_id} выполнен! "
+            "Читателю отправлено уведомление."
+        )
+
+    await callback.answer("Заказ выполнен!")
 
 
 # =========================

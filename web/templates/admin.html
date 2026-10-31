@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Админ-панель — My Library</title>
     <link rel="stylesheet" href="/static/css/admin.css">
+<style>
+.orders-panel{margin:25px 0;padding:24px}
+.order-row{padding:17px 0;border-bottom:1px solid #ddd;gap:15px}
+.order-actions{display:flex;gap:8px;flex-wrap:wrap}
+.order-actions form{margin:0}
+.order-actions button{padding:9px 13px;cursor:pointer}
+</style>
 </head>
 <body class="admin-page">
     <aside class="sidebar">
@@ -22,7 +29,8 @@
             ▦ <span>Обзор библиотеки</span>
         </a>
 
-        <a class="nav" href="/">
+        <a class="nav" href="/admin#orders">📚 <span>Заказы читателей</span></a>
+<a class="nav" href="/">
             ↗ <span>Открыть сайт</span>
         </a>
 
@@ -75,7 +83,60 @@
             </article>
         </section>
 
-        <section class="content-grid">
+        
+        <section class="panel orders-panel" id="orders">
+            <div class="panel-heading">
+                <div>
+                    <p class="eyebrow">ЗАПРОСЫ ЧИТАТЕЛЕЙ</p>
+                    <h2>Заказы книг 📚</h2>
+                </div>
+                <span class="count-pill">{{ orders|length }} заявок</span>
+            </div>
+            {% for order in orders %}
+            <article class="book-row order-row">
+                <div class="book-info">
+                    <strong>{{ order.book_title }}</strong>
+                    <span>Автор: {{ order.author or "Не указан" }}</span>
+                    <span>Читатель: {{ order.username }} · {{ order.email }}</span>
+                    <span>Комментарий: {{ order.comment or "Нет" }}</span>
+                    <small>Заказ №{{ order.id }} · {{ order.created_at }}</small>
+                    <small>
+                    Статус:
+                    {% if order.status == "pending" %}Ожидает решения
+                    {% elif order.status == "accepted" %}Принят
+                    {% elif order.status == "completed" %}Книга добавлена
+                    {% elif order.status == "rejected" %}Отклонён
+                    {% endif %}
+                    </small>
+                </div>
+                {% if order.status == "pending" %}
+                <div class="order-actions">
+                    <form method="post" action="/admin/orders/{{ order.id }}/status">
+                        <input type="hidden" name="status" value="accepted">
+                        <div class="field">
+<label>Связать с принятым заказом</label>
+<select name="order_id">
+<option value="">Без заказа</option>
+{% for order in available_orders %}
+<option value="{{ order.id }}">№{{ order.id }} — {{ order.book_title }} ({{ order.customer_name }})</option>
+{% endfor %}
+</select>
+</div>
+<button class="primary">Принять</button>
+                    </form>
+                    <form method="post" action="/admin/orders/{{ order.id }}/status">
+                        <input type="hidden" name="status" value="rejected">
+                        <button class="delete-btn">Отклонить</button>
+                    </form>
+                </div>
+                {% endif %}
+            </article>
+            {% else %}
+            <p class="empty-state">Пока заказов нет.</p>
+            {% endfor %}
+        </section>
+
+<section class="content-grid">
             <article class="panel add-panel">
                 <div class="panel-heading">
                     <div>

@@ -14,20 +14,20 @@
 
         <p class="eyebrow">ЛИЧНЫЙ КАБИНЕТ</p>
         <h1>С возвращением!</h1>
-        <p class="account-muted">Войдите, чтобы продолжить чтение.</p>
+        <p class="account-muted">Войдите в свою библиотеку.</p>
 
         {% if error %}
         <div class="account-error">{{ error }}</div>
         {% endif %}
 
         <form method="post" action="/login">
-            <label>Email</label>
+            <label>Логин или email</label>
             <input
-                type="email"
+                type="text"
                 name="email"
                 required
-                autocomplete="email"
-                placeholder="example@mail.com"
+                autocomplete="username"
+                placeholder="Логин администратора или email читателя"
             >
 
             <label>Пароль</label>

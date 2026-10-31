@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Стол заказов — My Library</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f3efe5;color:#26352c;
+font-family:Inter,Arial,sans-serif}
+.top{background:#172d23;color:white;padding:20px 7%;
+display:flex;justify-content:space-between;align-items:center}
+.brand{font:24px Georgia,serif;letter-spacing:1px}
+.back{color:#ead5a8;text-decoration:none}
+.hero{padding:65px 8%;background:linear-gradient(120deg,#173326,#315b43);
+color:white}
+.eyebrow{color:#d6b879;letter-spacing:3px;font-size:11px}
+h1{font:52px Georgia,serif;margin:14px 0}
+.hero p:last-child{color:#d9e2da;line-height:1.7}
+.layout{max-width:1050px;margin:-25px auto 70px;padding:0 20px;
+display:grid;grid-template-columns:1.3fr .7fr;gap:22px;
+position:relative}
+.card{background:#fffdf8;border:1px solid #e4ddcf;
+border-radius:17px;padding:35px;box-shadow:0 15px 45px #26352c12}
+h2{font:30px Georgia,serif;margin-top:0}
+.subtitle{color:#85877e;font-size:14px;line-height:1.7}
+form{display:grid;grid-template-columns:1fr 1fr;gap:17px;margin-top:25px}
+label{font-size:13px;font-weight:700;display:grid;gap:8px}
+input,textarea{width:100%;padding:13px;border:1px solid #deded2;
+border-radius:9px;background:#fff;color:#26352c;font:14px Arial}
+input:focus,textarea:focus{outline:2px solid #789b79}
+textarea{min-height:110px;resize:vertical}
+.wide,button,#result{grid-column:1/-1}
+button{padding:15px;border:0;border-radius:9px;
+background:#28533b;color:white;font-size:15px;
+font-weight:bold;cursor:pointer}
+button:disabled{opacity:.6}
+#result{color:#28533b;font-size:14px;line-height:1.6}
+.info{background:#e7e0d1;border-radius:15px;padding:26px}
+.info h3{font:23px Georgia,serif}
+.info p{font-size:14px;line-height:1.8;color:#6c7066}
+footer{text-align:center;padding:25px;color:#929187;font-size:12px}
+@media(max-width:720px){
+.layout{grid-template-columns:1fr}
+.hero{padding:45px 25px}
+h1{font-size:40px}
+.card{padding:23px}
+}
+@media(max-width:480px){
+form{grid-template-columns:1fr}
+.wide,button,#result{grid-column:1}
+.top{padding:18px}
+.brand{font-size:19px}
+}
+</style>
+</head>
+<body>
+<header class="top">
+ <div class="brand">✦ MY LIBRARY</div>
+ <a class="back" href="/">← В библиотеку</a>
+</header>
+<section class="hero">
+ <p class="eyebrow">MY LIBRARY · YOUR NEXT STORY</p>
+ <h1>Стол заказов</h1>
+ <p>Не нашли нужную книгу? Оставьте заявку.
+ Мы постараемся найти её для вас.</p>
+</section>
+<main class="layout">
+ <section class="card">
+  <h2>Заказать книгу</h2>
+  <p class="subtitle">Заполните форму. Мы получим заявку
+  и свяжемся с вами.</p>
+  <p class="subtitle">Заказ привязывается к вашему аккаунту. <a href="/login">Войдите в личный кабинет</a>, чтобы заказать книгу.</p>
+<form id="order-form">
+   <label>Название книги *
+    <input name="book_title" required maxlength="255"
+    placeholder="Название книги">
+   </label>
+   <label>Автор
+    <input name="author" maxlength="255"
+    placeholder="Имя автора">
+   </label>
+   <label class="wide">Комментарий
+    <textarea name="comment" maxlength="2000"
+    placeholder="Дополнительные пожелания"></textarea>
+   </label>
+   <button type="submit">📩 Отправить заявку</button>
+   <p id="result" aria-live="polite"></p>
+  </form>
+ </section>
+ <aside class="info">
+  <h3>Как это работает?</h3>
+  <p>01 — Напишите название нужной книги.</p>
+  <p>02 — Оставьте свой контакт.</p>
+  <p>03 — Заявка поступит администратору в Telegram.</p>
+  <p>Мы свяжемся с вами после получения заявки.</p>
+ </aside>
+</main>
+<footer>MY LIBRARY · КНИГИ, КОТОРЫЕ ОСТАЮТСЯ С ВАМИ</footer>
+<script>
+const form=document.getElementById("order-form");
+const result=document.getElementById("result");
+const button=form.querySelector("button");
+form.addEventListener("submit",async e=>{
+ e.preventDefault();
+ button.disabled=true;
+ result.textContent="Отправляем заявку...";
+ try{
+  const response=await fetch("/api/book-requests",{
+   method:"POST",
+   headers:{"Content-Type":"application/x-www-form-urlencoded"},
+   body:new URLSearchParams(new FormData(form))
+  });
+  const data=await response.json();
+  if(!response.ok) throw new Error(data.detail||"Ошибка отправки");
+  form.reset();
+  result.textContent=data.notified
+   ? "Заявка №"+data.id+" отправлена! Спасибо."
+   : "Заявка №"+data.id+" сохранена, но уведомление Telegram не отправлено.";
+ }catch(error){
+  result.textContent=error.message||"Ошибка соединения.";
+ }finally{button.disabled=false;}
+});
+</script>
+</body>
+</html>

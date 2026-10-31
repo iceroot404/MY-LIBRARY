@@ -109,3 +109,56 @@ class Review(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
+
+
+class BookRequest(Base):
+    __tablename__ = "book_requests"
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True, autoincrement=True
+    )
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    status: Mapped[str] = mapped_column(
+        String(20), default="pending", nullable=False
+    )
+    book_id: Mapped[int | None] = mapped_column(
+        ForeignKey("books.id"), nullable=True
+    )
+    book_title: Mapped[str] = mapped_column(
+        String(255), nullable=False
+    )
+    author: Mapped[str] = mapped_column(
+        String(255), default="", nullable=False
+    )
+    customer_name: Mapped[str] = mapped_column(
+        String(120), nullable=False
+    )
+    contact: Mapped[str] = mapped_column(
+        String(120), nullable=False
+    )
+    comment: Mapped[str] = mapped_column(
+        Text, default="", nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+
+
+class UserNotification(Base):
+    __tablename__ = "user_notifications"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=False, index=True
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    message: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    book_id: Mapped[int | None] = mapped_column(
+        ForeignKey("books.id"), nullable=True
+    )
+    is_read: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )

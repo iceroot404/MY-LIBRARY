@@ -682,3 +682,61 @@ modal.addEventListener("click", (event) => {
 // ===========================
 
 load(true);
+
+
+// ===========================
+// ОБРАБОТКА ЗАКАЗА КНИГИ
+// ===========================
+
+const bookRequestForm = $("book-request-form");
+
+if (bookRequestForm) {
+    bookRequestForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const button = bookRequestForm.querySelector(
+            'button[type="submit"]'
+        );
+        const result = $("book-request-result");
+
+        button.disabled = true;
+        result.textContent = "Отправляем заявку...";
+
+        try {
+            const body = new URLSearchParams(
+                new FormData(bookRequestForm)
+            );
+
+            const response = await fetch("/api/book-requests", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                body: body
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.detail || "Ошибка отправки");
+            }
+
+            bookRequestForm.reset();
+
+            if (data.notified) {
+                result.textContent =
+                    `Заявка №${data.id} отправлена! Спасибо.`;
+            } else {
+                result.textContent =
+                    "Заявка сохранена, но Telegram не отправил уведомление. "
+                    + "Попробуйте связаться с администрацией.";
+            }
+
+        } catch (error) {
+            result.textContent =
+                error.message || "Не удалось отправить заявку.";
+        } finally {
+            button.disabled = false;
+        }
+    });
+}

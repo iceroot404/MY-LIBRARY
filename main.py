@@ -2,6 +2,7 @@
 import asyncio
 import hashlib
 import hmac
+import html
 import re
 import secrets
 
@@ -30,10 +31,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from bot.admin_bot import build_bot
+from bot.admin_bot import build_bot, order_keyboard
 from bot.config import (
     BOT_TOKEN,
     ADMIN_ID,
+    ADMIN_LOGIN,
     ADMIN_PASSWORD,
     SESSION_SECRET,
     UPLOADS_DIR,
@@ -47,6 +49,8 @@ from bot.models import (
     Favorite,
     ReadingProgress,
     Review,
+    BookRequest,
+    UserNotification,
 )
 
 
@@ -189,9 +193,11 @@ async def lifespan(app: FastAPI):
 
     bot = None
     bot_task = None
+    app.state.telegram_bot = None
 
     if BOT_TOKEN and ADMIN_ID:
         bot, dp = build_bot()
+        app.state.telegram_bot = bot
         bot_task = asyncio.create_task(dp.start_polling(bot))
     else:
         print(
@@ -238,6 +244,13 @@ app.mount(
 # ГЛАВНАЯ СТРАНИЦА
 # =========================
 
+@app.get("/orders", response_class=HTMLResponse)
+def orders_page(request: Request):
+    return templates.TemplateResponse(
+        "orders.html", {"request": request}
+    )
+
+
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     user = get_current_user(request)
@@ -252,9 +265,69 @@ def index(request: Request):
     )
 
 
+
 # =========================
-# СПИСОК КНИГ
+# ЗАКАЗ КНИГИ
 # =========================
+
+
+@app.post("/api/book-requests")
+async def create_book_request(
+    request: Request,
+    book_title: str = Form(...),
+    author: str = Form(""),
+    comment: str = Form(""),
+):
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(401, "Сначала войдите в личный кабинет.")
+
+    book_title = book_title.strip()[:255]
+    author = author.strip()[:255]
+    comment = comment.strip()[:2000]
+
+    if len(book_title) < 2:
+        raise HTTPException(400, "Введите название книги")
+
+    with SessionLocal() as db:
+        order = BookRequest(
+            user_id=user.id,
+            book_title=book_title,
+            author=author,
+            customer_name=user.username,
+            contact="",
+            comment=comment,
+            status="pending",
+        )
+        db.add(order)
+        db.commit()
+        db.refresh(order)
+        order_id = order.id
+
+    bot = getattr(request.app.state, "telegram_bot", None)
+    notified = False
+
+    if bot and ADMIN_ID:
+        message = (
+            f"📚 <b>Новый заказ №{order_id}</b>\n\n"
+            f"<b>Книга:</b> {html.escape(book_title)}\n"
+            f"<b>Автор:</b> {html.escape(author or 'Не указан')}\n"
+            f"<b>Читатель:</b> {html.escape(user.username)}\n"
+            f"<b>Email:</b> {html.escape(user.email)}\n"
+            f"<b>Комментарий:</b> {html.escape(comment or 'Нет')}"
+        )
+        try:
+            await bot.send_message(
+                chat_id=ADMIN_ID,
+                text=message,
+                parse_mode="HTML",
+                reply_markup=order_keyboard(order_id),
+            )
+            notified = True
+        except Exception as error:
+            print("Ошибка Telegram:", error)
+
+    return {"ok": True, "id": order_id, "notified": notified}
 
 @app.get("/api/books")
 def api_books(
@@ -349,6 +422,18 @@ def register(
     username = username.strip()
     email = email.strip().lower()
 
+    # ADMIN_LOGIN_RESERVED
+    if ADMIN_LOGIN and (
+        username.casefold() == ADMIN_LOGIN.casefold()
+        or email.casefold() == ADMIN_LOGIN.casefold()
+    ):
+        return templates.TemplateResponse(
+            request,
+            "register.html",
+            {"error": "Это имя зарезервировано."},
+            status_code=409,
+        )
+
     if len(username) < 3 or len(username) > 40:
         return templates.TemplateResponse(
             request,
@@ -413,6 +498,12 @@ def register(
 
 @app.get("/login", response_class=HTMLResponse)
 def user_login_page(request: Request):
+    if request.session.get("admin"):
+        return RedirectResponse("/admin", status_code=303)
+
+    if get_current_user(request):
+        return RedirectResponse("/profile", status_code=303)
+
     return templates.TemplateResponse(
         request,
         "user_login.html",
@@ -426,10 +517,29 @@ def user_login(
     email: str = Form(...),
     password: str = Form(...),
 ):
+    login_value = email.strip()
+
+    # Вход администратора
+    if (
+        ADMIN_LOGIN
+        and ADMIN_PASSWORD
+        and ADMIN_PASSWORD != "change-this-admin-password"
+        and hmac.compare_digest(
+            login_value.casefold(),
+            ADMIN_LOGIN.casefold(),
+        )
+        and hmac.compare_digest(password, ADMIN_PASSWORD)
+    ):
+        request.session.clear()
+        request.session["admin"] = True
+        request.session["admin_login"] = ADMIN_LOGIN
+        return RedirectResponse("/admin", status_code=303)
+
+    # Вход обычного читателя
     with SessionLocal() as db:
         user = (
             db.query(User)
-            .filter(User.email == email.strip().lower())
+            .filter(User.email == login_value.lower())
             .first()
         )
 
@@ -440,7 +550,7 @@ def user_login(
             return templates.TemplateResponse(
                 request,
                 "user_login.html",
-                {"error": "Неверный email или пароль"},
+                {"error": "Неверный логин или пароль"},
                 status_code=401,
             )
 
@@ -460,10 +570,28 @@ def user_logout(request: Request):
 # ЛИЧНЫЙ КАБИНЕТ
 # =========================
 
+
+@app.post("/notifications/{notification_id}/read")
+def mark_notification_read(notification_id: int, request: Request):
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+
+    with SessionLocal() as db:
+        item = db.query(UserNotification).filter(
+            UserNotification.id == notification_id,
+            UserNotification.user_id == user.id,
+        ).first()
+        if item:
+            item.is_read = 1
+            db.commit()
+
+    return RedirectResponse("/profile", status_code=303)
+
+
 @app.get("/profile", response_class=HTMLResponse)
 def profile(request: Request):
     user = get_current_user(request)
-
     if not user:
         return RedirectResponse("/login", status_code=303)
 
@@ -472,28 +600,22 @@ def profile(request: Request):
             db.query(Book)
             .join(Favorite, Favorite.book_id == Book.id)
             .filter(Favorite.user_id == user.id)
-            .order_by(Favorite.id.desc())
-            .all()
+            .order_by(Favorite.id.desc()).all()
         )
-
         progress_rows = (
             db.query(ReadingProgress, Book)
             .join(Book, Book.id == ReadingProgress.book_id)
             .filter(ReadingProgress.user_id == user.id)
-            .order_by(ReadingProgress.updated_at.desc())
-            .all()
+            .order_by(ReadingProgress.updated_at.desc()).all()
         )
-
         review_rows = (
             db.query(Review, Book)
             .join(Book, Book.id == Review.book_id)
             .filter(Review.user_id == user.id)
-            .order_by(Review.updated_at.desc())
-            .all()
+            .order_by(Review.updated_at.desc()).all()
         )
 
         favorites = [book.to_dict() for book in favorite_rows]
-
         progress = [
             {
                 "book": book.to_dict(),
@@ -502,7 +624,6 @@ def profile(request: Request):
             }
             for item, book in progress_rows
         ]
-
         reviews = [
             {
                 "book_title": book.title,
@@ -511,6 +632,19 @@ def profile(request: Request):
             }
             for item, book in review_rows
         ]
+        notifications = (
+            db.query(UserNotification)
+            .filter(UserNotification.user_id == user.id)
+            .order_by(UserNotification.created_at.desc())
+            .limit(50).all()
+        )
+        unread_notifications = (
+            db.query(UserNotification)
+            .filter(
+                UserNotification.user_id == user.id,
+                UserNotification.is_read == 0,
+            ).count()
+        )
 
     return templates.TemplateResponse(
         request,
@@ -520,13 +654,10 @@ def profile(request: Request):
             "favorites": favorites,
             "progress": progress,
             "reviews": reviews,
+            "notifications": notifications,
+            "unread_notifications": unread_notifications,
         },
     )
-
-
-# =========================
-# ИЗБРАННОЕ
-# =========================
 
 @app.get("/api/favorites")
 def get_favorites(user: User = Depends(require_user)):
@@ -809,32 +940,12 @@ async def create_review(
 
 @app.get("/admin/login", response_class=HTMLResponse)
 def admin_login_page(request: Request):
-    if request.session.get("admin"):
-        return RedirectResponse("/admin", status_code=303)
-
-    return templates.TemplateResponse(
-        request,
-        "login.html",
-        {"error": ""},
-    )
+    return RedirectResponse("/login", status_code=303)
 
 
 @app.post("/admin/login")
-def admin_login(
-    request: Request,
-    password: str = Form(...),
-):
-    if not secrets.compare_digest(password, ADMIN_PASSWORD):
-        return templates.TemplateResponse(
-            request,
-            "login.html",
-            {"error": "Неверный пароль"},
-            status_code=401,
-        )
-
-    request.session["admin"] = True
-
-    return RedirectResponse("/admin", status_code=303)
+def admin_login(request: Request, password: str = Form(...)):
+    return RedirectResponse("/login", status_code=303)
 
 
 @app.post("/admin/logout")
@@ -846,6 +957,45 @@ def admin_logout(
     return RedirectResponse("/admin/login", status_code=303)
 
 
+
+@app.post("/admin/orders/{order_id}/status")
+def change_order_status(
+    order_id: int,
+    status: str = Form(...),
+    _: bool = Depends(require_admin),
+):
+    if status not in ("accepted", "rejected"):
+        raise HTTPException(400, "Неверный статус")
+
+    with SessionLocal() as db:
+        order = db.get(BookRequest, order_id)
+        if not order:
+            raise HTTPException(404, "Заказ не найден")
+        if order.status != "pending":
+            raise HTTPException(400, "Заказ уже обработан")
+
+        order.status = status
+        if order.user_id:
+            if status == "accepted":
+                title = "Ваш заказ принят!"
+                message = (
+                    f"Заказ «{order.book_title}» принят. "
+                    "Мы сообщим, когда книга появится в библиотеке."
+                )
+            else:
+                title = "Заказ отклонён"
+                message = f"К сожалению, заказ «{order.book_title}» отклонён."
+
+            db.add(UserNotification(
+                user_id=order.user_id,
+                title=title,
+                message=message,
+            ))
+        db.commit()
+
+    return RedirectResponse("/admin#orders", status_code=303)
+
+
 @app.get("/admin", response_class=HTMLResponse)
 def admin_page(request: Request):
     if not request.session.get("admin"):
@@ -854,12 +1004,36 @@ def admin_page(request: Request):
     with SessionLocal() as db:
         total = db.query(Book).count()
         categories = db.query(Book.category).distinct().count()
-
         books = (
-            db.query(Book)
-            .order_by(Book.id.desc())
-            .limit(100)
-            .all()
+            db.query(Book).order_by(Book.id.desc()).limit(100).all()
+        )
+        rows = (
+            db.query(BookRequest, User)
+            .outerjoin(User, BookRequest.user_id == User.id)
+            .order_by(BookRequest.id.desc()).limit(100).all()
+        )
+        orders = [
+            {
+                "id": o.id,
+                "book_title": o.book_title,
+                "author": o.author,
+                "customer_name": o.customer_name,
+                "username": u.username if u else "Старый заказ",
+                "email": u.email if u else "",
+                "comment": o.comment,
+                "status": o.status,
+                "created_at": o.created_at,
+            }
+            for o, u in rows
+        ]
+        available_orders = (
+            db.query(BookRequest)
+            .filter(
+                BookRequest.status == "accepted",
+                BookRequest.user_id.isnot(None),
+                BookRequest.book_id.is_(None),
+            )
+            .order_by(BookRequest.id.desc()).all()
         )
 
     return templates.TemplateResponse(
@@ -869,6 +1043,8 @@ def admin_page(request: Request):
             "total": total,
             "categories": categories,
             "books": books,
+            "orders": orders,
+            "available_orders": available_orders,
         },
     )
 
@@ -883,29 +1059,38 @@ async def admin_create_book(
     description: str = Form(""),
     cover: UploadFile | None = File(None),
     book_file: UploadFile | None = File(None),
+    order_id: str = Form(""),
 ):
     title = title.strip()
     author = author.strip()
-
     if not title or not author:
-        raise HTTPException(
-            400,
-            "Название и автор обязательны",
-        )
+        raise HTTPException(400, "Название и автор обязательны")
 
     cover_name = (
         await store_upload(cover, ALLOWED_IMAGE_EXTENSIONS)
-        if cover and cover.filename
-        else None
+        if cover and cover.filename else None
     )
-
     book_name = (
         await store_upload(book_file, ALLOWED_BOOK_EXTENSIONS)
-        if book_file and book_file.filename
-        else None
+        if book_file and book_file.filename else None
     )
 
     with SessionLocal() as db:
+        linked_order = None
+        if order_id.strip():
+            try:
+                selected_id = int(order_id)
+            except ValueError:
+                raise HTTPException(400, "Неверный номер заказа")
+
+            linked_order = db.query(BookRequest).filter(
+                BookRequest.id == selected_id,
+                BookRequest.status == "accepted",
+                BookRequest.user_id.isnot(None),
+            ).first()
+            if not linked_order:
+                raise HTTPException(400, "Принятый заказ не найден")
+
         book = Book(
             title=title[:255],
             author=author[:255],
@@ -914,12 +1099,15 @@ async def admin_create_book(
             cover=cover_name,
             file=book_name,
         )
-
         db.add(book)
+        db.flush()
+
+        if linked_order:
+            linked_order.book_id = book.id
+
         db.commit()
 
-    return RedirectResponse("/admin?created=1", status_code=303)
-
+    return RedirectResponse("/admin?created=1#orders", status_code=303)
 
 @app.post("/admin/books/{book_id}/delete")
 def admin_delete_book(
