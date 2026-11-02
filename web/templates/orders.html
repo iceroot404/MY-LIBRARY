@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" data-theme="{{ appearance.theme }}" data-background="{{ appearance.background_mode }}" data-font="{{ appearance.font_family }}" data-card-style="{{ appearance.card_style }}" data-reading-width="{{ appearance.reading_width }}" style="--user-accent: {{ appearance.accent_color }}; --user-font-size: {{ appearance.font_size }}px; --user-line-height: {{ appearance.line_height }}; --user-reading-width: {{ appearance.reading_width }};{% if appearance.background_mode == 'image' and appearance.background_image_url %} --user-bg-image: url('{{ appearance.background_image_url }}');{% endif %}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Стол заказов — My Library</title>
+<title>Стол заказов — {{ site_config.site_name }}</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:#f3efe5;color:#26352c;
@@ -53,10 +53,13 @@ form{grid-template-columns:1fr}
 .brand{font-size:19px}
 }
 </style>
+<link rel="stylesheet" href="/static/css/style.css"><link rel="stylesheet" href="/static/css/personalization.css?v=1">
+{% if site_config.favicon_url %}<link rel="icon" href="{{ site_config.favicon_url }}">{% endif %}
+<link rel="manifest" href="/static/manifest.webmanifest">
 </head>
 <body>
 <header class="top">
- <div class="brand">✦ MY LIBRARY</div>
+ <div class="brand">✦ {{ site_config.site_name }}</div>
  <a class="back" href="/">← В библиотеку</a>
 </header>
 <section class="hero">
@@ -68,8 +71,8 @@ form{grid-template-columns:1fr}
 <main class="layout">
  <section class="card">
   <h2>Заказать книгу</h2>
-  <p class="subtitle">Заполните форму. Мы получим заявку
-  и свяжемся с вами.</p>
+  <p class="subtitle">Заполните форму. Заявка будет привязана к вашему аккаунту,
+  а статус можно отслеживать в личном кабинете.</p>
   <p class="subtitle">Заказ привязывается к вашему аккаунту. <a href="/login">Войдите в личный кабинет</a>, чтобы заказать книгу.</p>
 <form id="order-form">
    <label>Название книги *
@@ -91,9 +94,9 @@ form{grid-template-columns:1fr}
  <aside class="info">
   <h3>Как это работает?</h3>
   <p>01 — Напишите название нужной книги.</p>
-  <p>02 — Оставьте свой контакт.</p>
-  <p>03 — Заявка поступит администратору в Telegram.</p>
-  <p>Мы свяжемся с вами после получения заявки.</p>
+  <p>02 — Заявка поступит администратору.</p>
+  <p>03 — Следите за статусом в личном кабинете.</p>
+  <p>Когда книга появится, вы получите уведомление со ссылкой на чтение.</p>
  </aside>
 </main>
 <footer>MY LIBRARY · КНИГИ, КОТОРЫЕ ОСТАЮТСЯ С ВАМИ</footer>
@@ -122,5 +125,6 @@ form.addEventListener("submit",async e=>{
  }finally{button.disabled=false;}
 });
 </script>
+<script src="/static/js/pwa.js"></script>
 </body>
 </html>

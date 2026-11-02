@@ -1,0 +1,11 @@
+{
+  "name": "My Library — цифровая библиотека",
+  "short_name": "My Library",
+  "description": "Личная онлайн-библиотека и читалка",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#101a16",
+  "theme_color": "#1d3029",
+  "icons": [{"src":"/static/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}

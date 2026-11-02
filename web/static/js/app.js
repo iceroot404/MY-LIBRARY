@@ -10,7 +10,8 @@ const modalBody = $("modal-body");
 
 const state = {
     q: "",
-    category: ""
+    category: "",
+    sort: "newest"
 };
 
 const palette = [
@@ -73,6 +74,12 @@ function setTheme(theme) {
     } catch (error) {
         console.warn("Не удалось сохранить тему.");
     }
+    if (window.MY_LIBRARY_AUTHENTICATED) {
+        fetch("/api/preferences/appearance", {
+            method: "POST", headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({theme})
+        }).catch(() => {});
+    }
 
     themeButtons.forEach((button) => {
 
@@ -88,11 +95,12 @@ function setTheme(theme) {
     });
 }
 
-let savedTheme = "light";
+let savedTheme = document.documentElement.dataset.theme || "light";
 
 try {
-    savedTheme =
-        localStorage.getItem("library-theme") || "light";
+    if (!window.MY_LIBRARY_AUTHENTICATED) {
+        savedTheme = localStorage.getItem("library-theme") || savedTheme;
+    }
 } catch (error) {
     console.warn("Не удалось загрузить тему.");
 }
@@ -180,6 +188,7 @@ function bookCard(book, index) {
                 <p>${esc(book.author)}</p>
 
             </button>
+            <button class="compare-button" type="button" data-compare-id="${book.id}">Сравнить</button>
 
         </article>
     `;
@@ -247,7 +256,8 @@ async function load(updateFilters = false) {
 
     const params = new URLSearchParams({
         q: state.q,
-        category: state.category
+        category: state.category,
+        sort: state.sort
     });
 
     try {
@@ -284,6 +294,14 @@ async function load(updateFilters = false) {
     }
 }
 
+
+const sortSelect = $("sort-books");
+if (sortSelect) {
+    sortSelect.addEventListener("change", () => {
+        state.sort = sortSelect.value;
+        load();
+    });
+}
 
 // ===========================
 // ПОИСК
@@ -457,6 +475,77 @@ async function loadReviews(bookId) {
 }
 
 
+
+async function loadShelfStatus(bookId) {
+    const select = $("book-shelf-status");
+    if (!select) return;
+    try {
+        const response = await fetch("/api/shelves");
+        if (response.status === 401) { select.value = ""; return; }
+        if (!response.ok) return;
+        const data = await response.json();
+        const item = (data.items || []).find(x => Number(x.book.id) === Number(bookId));
+        select.value = item ? item.status : "";
+    } catch { select.value = ""; }
+}
+
+async function loadDiscussion(bookId) {
+    const container = $("discussion-list");
+    if (!container) return;
+    try {
+        const response = await fetch(`/api/discussions/${bookId}`);
+        const data = await response.json();
+        const items = data.items || [];
+        container.innerHTML = items.map(item => `
+            <article class="discussion-post ${item.parent_id ? "discussion-reply" : ""}">
+                <div class="discussion-meta"><strong>${esc(item.username)}</strong><time>${new Date(item.created_at).toLocaleString()}</time></div>
+                <p>${esc(item.content)}</p>
+                <div class="discussion-actions">
+                    <button type="button" data-discussion-like="${item.id}">♥ ${item.likes}</button>
+                    ${item.can_report ? `<button type="button" data-discussion-report="${item.id}">Пожаловаться</button>` : ""}
+                    ${!item.parent_id ? `<button type="button" data-discussion-reply="${item.id}">Ответить</button>` : ""}
+                </div>
+            </article>
+        `).join("") || "<p>Пока нет обсуждений. Будьте первым!</p>";
+    } catch { container.textContent = "Не удалось загрузить обсуждение."; }
+}
+
+document.body.addEventListener("click", async (event) => {
+    const likeButton = event.target.closest("[data-discussion-like]");
+    const reportButton = event.target.closest("[data-discussion-report]");
+    const replyButton = event.target.closest("[data-discussion-reply]");
+    const bookId = Number(modalBody.querySelector("[data-book-id]")?.dataset.bookId || 0);
+    if (likeButton) {
+        const response = await fetch(`/api/discussions/${likeButton.dataset.discussionLike}/like`, {method: "POST"});
+        if (response.status === 401) { location.href = "/login"; return; }
+        const data = await response.json();
+        likeButton.textContent = `♥ ${data.likes}`;
+        return;
+    }
+    if (reportButton) {
+        const response = await fetch(`/api/discussions/${reportButton.dataset.discussionReport}/report`, {
+            method: "POST", headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({reason: "Жалоба читателя"})
+        });
+        if (response.status === 401) { location.href = "/login"; return; }
+        alert(response.ok ? "Жалоба отправлена модератору." : "Не удалось отправить жалобу.");
+        return;
+    }
+    if (replyButton) {
+        const content = prompt("Ваш ответ:");
+        if (!content) return;
+        const post = replyButton.dataset.discussionReply;
+        const book = books.find(x => Number(x.id) === Number(modal.dataset.bookId));
+        if (!book) return;
+        const response = await fetch(`/api/discussions/${book.id}`, {
+            method: "POST", headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({content, parent_id: Number(post)})
+        });
+        if (response.status === 401) { location.href = "/login"; return; }
+        if (response.ok) loadDiscussion(book.id);
+    }
+});
+
 // ===========================
 // ОТКРЫТИЕ КНИГИ
 // ===========================
@@ -510,6 +599,7 @@ async function openBook(book) {
             </p>
         `;
 
+    modal.dataset.bookId = String(book.id);
     modalBody.innerHTML = `
         <div class="detail">
 
@@ -527,7 +617,7 @@ async function openBook(book) {
                 <h2>${esc(book.title)}</h2>
 
                 <p class="author">
-                    ${esc(book.author)}
+                    <a href="/authors/${encodeURIComponent(book.author)}">${esc(book.author)}</a>
                 </p>
 
                 <p class="desc">
@@ -538,6 +628,18 @@ async function openBook(book) {
                 </p>
 
                 ${actions}
+
+                <div class="library-tools">
+                    <label for="book-shelf-status">Моя книжная полка</label>
+                    <select id="book-shelf-status">
+                        <option value="">Не добавлена</option>
+                        <option value="want">Хочу прочитать</option>
+                        <option value="reading">Читаю</option>
+                        <option value="read">Прочитано</option>
+                    </select>
+                    <span id="shelf-feedback" role="status"></span>
+                    <button type="button" id="report-book">Сообщить об ошибке</button>
+                </div>
 
                 <div class="review-area">
 
@@ -574,6 +676,15 @@ async function openBook(book) {
 
                 </div>
 
+                <div class="discussion-area">
+                    <h3>Обсуждение книги</h3>
+                    <div id="discussion-list" class="discussion-list">Загружаем обсуждение...</div>
+                    <form id="discussion-form">
+                        <textarea name="content" maxlength="3000" placeholder="Поделитесь мыслями о книге..." required></textarea>
+                        <button class="btn" type="submit">Опубликовать</button>
+                    </form>
+                </div>
+
             </div>
 
         </div>
@@ -582,6 +693,49 @@ async function openBook(book) {
     modal.showModal();
 
     loadReviews(book.id);
+    loadShelfStatus(book.id);
+    loadDiscussion(book.id);
+
+    const shelfSelect = $("book-shelf-status");
+    shelfSelect?.addEventListener("change", async () => {
+        if (!shelfSelect.value) {
+            await fetch(`/api/shelves/${book.id}`, {method: "DELETE"});
+            $("shelf-feedback").textContent = "Убрано с полки";
+            return;
+        }
+        const response = await fetch(`/api/shelves/${book.id}`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({status: shelfSelect.value})
+        });
+        if (response.status === 401) { location.href = "/login"; return; }
+        $("shelf-feedback").textContent = response.ok ? "Сохранено" : "Ошибка сохранения";
+    });
+
+    $("report-book")?.addEventListener("click", async () => {
+        const reason = prompt("Опишите ошибку в книге: неверная обложка, автор, файл и т. д.");
+        if (!reason) return;
+        try {
+            const response = await fetch(`/api/books/${book.id}/report`, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({reason})});
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.detail || "Не удалось отправить жалобу.");
+            alert("Спасибо! Сообщение отправлено администратору.");
+        } catch (error) { alert(error.message); }
+    });
+
+    const discussionForm = $("discussion-form");
+    discussionForm?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const content = new FormData(discussionForm).get("content");
+        const response = await fetch(`/api/discussions/${book.id}`, {
+            method: "POST", headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({content})
+        });
+        if (response.status === 401) { location.href = "/login"; return; }
+        if (!response.ok) { alert("Не удалось опубликовать сообщение."); return; }
+        discussionForm.reset();
+        loadDiscussion(book.id);
+    });
 
     $("review-form").addEventListener(
         "submit",
@@ -676,6 +830,44 @@ modal.addEventListener("click", (event) => {
 
 });
 
+
+// ===========================
+// СРАВНЕНИЕ КНИГ
+// ===========================
+const compareSelection = new Set();
+function updateCompareBar() {
+    const bar = $("compare-bar");
+    const countNode = $("compare-count");
+    if (!bar || !countNode) return;
+    bar.hidden = compareSelection.size === 0;
+    countNode.textContent = `Выбрано ${compareSelection.size} книг`;
+    document.querySelectorAll("[data-compare-id]").forEach(button => {
+        const active = compareSelection.has(Number(button.dataset.compareId));
+        button.classList.toggle("selected", active);
+        button.textContent = active ? "Выбрано ✓" : "Сравнить";
+    });
+}
+grid?.addEventListener("click", event => {
+    const button = event.target.closest("[data-compare-id]");
+    if (!button) return;
+    const id = Number(button.dataset.compareId);
+    if (compareSelection.has(id)) compareSelection.delete(id);
+    else if (compareSelection.size < 4) compareSelection.add(id);
+    else return alert("Можно сравнить не более 4 книг.");
+    updateCompareBar();
+});
+$("compare-clear")?.addEventListener("click", () => { compareSelection.clear(); updateCompareBar(); });
+$("compare-open")?.addEventListener("click", async () => {
+    if (compareSelection.size < 2) return alert("Выберите минимум две книги.");
+    try {
+        const response = await fetch(`/api/books/compare?ids=${Array.from(compareSelection).join(",")}`);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "Ошибка сравнения.");
+        $("compare-content").innerHTML = `<div class="compare-grid">${(data.items || []).map(book => `<article><strong>${esc(book.title)}</strong><p>${esc(book.author)}</p><p>Категория: ${esc(book.category)}</p><p>Просмотры: ${book.view_count}</p><p>Скачивания: ${book.download_count}</p></article>`).join("")}</div>`;
+        $("compare-modal").showModal();
+    } catch (error) { alert(error.message); }
+});
+$("compare-close")?.addEventListener("click", () => $("compare-modal").close());
 
 // ===========================
 // ПЕРВАЯ ЗАГРУЗКА

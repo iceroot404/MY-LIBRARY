@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="{{ appearance.theme }}" data-background="{{ appearance.background_mode }}" data-font="{{ appearance.font_family }}" data-card-style="{{ appearance.card_style }}" data-reading-width="{{ appearance.reading_width }}" style="--user-accent: {{ appearance.accent_color }}; --user-font-size: {{ appearance.font_size }}px; --user-line-height: {{ appearance.line_height }}; --user-reading-width: {{ appearance.reading_width }};{% if appearance.background_mode == 'image' and appearance.background_image_url %} --user-bg-image: url('{{ appearance.background_image_url }}');{% endif %}">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Моё оформление — {{ site_config.site_name }}</title>
+<link rel="stylesheet" href="/static/css/style.css"><link rel="stylesheet" href="/static/css/account.css"><link rel="stylesheet" href="/static/css/personalization.css?v=1">
+{% if site_config.favicon_url %}<link rel="icon" href="{{ site_config.favicon_url }}">{% endif %}
+</head>
+<body class="profile-page settings-page">
+<header class="profile-header"><a class="account-brand" href="/">{% if site_config.logo_url %}<img class="brand-logo" src="{{ site_config.logo_url }}" alt="">{% else %}L ·{% endif %} {{ site_config.site_name }}</a><nav class="profile-nav"><a href="/">Библиотека</a><a href="/profile">Мой кабинет</a><a href="/logout">Выйти ↗</a></nav></header>
+<main class="settings-main">
+<section class="settings-intro"><p class="eyebrow">ПЕРСОНАЛЬНОЕ ОФОРМЛЕНИЕ</p><h1>Сделайте библиотеку своей</h1><p>Эти настройки сохраняются только в вашем аккаунте и не меняют оформление других читателей.</p></section>
+{% if request.query_params.get('saved') %}<div class="settings-success" role="status">Настройки сохранены.</div>{% endif %}
+<form class="settings-card" method="post" action="/settings/appearance" enctype="multipart/form-data">
+<h2>Внешний вид</h2>
+<div class="settings-grid">
+<label>Тема<select name="theme"><option value="light" {% if appearance.theme=='light' %}selected{% endif %}>Светлая</option><option value="dark" {% if appearance.theme=='dark' %}selected{% endif %}>Тёмная</option><option value="sepia" {% if appearance.theme=='sepia' %}selected{% endif %}>Сепия</option></select></label>
+<label>Акцентный цвет<input type="color" name="accent_color" value="{{ appearance.accent_color }}"></label>
+<label>Фон страниц<select name="background_mode"><option value="plain" {% if appearance.background_mode=='plain' %}selected{% endif %}>Однотонный</option><option value="paper" {% if appearance.background_mode=='paper' %}selected{% endif %}>Бумага</option><option value="gradient" {% if appearance.background_mode=='gradient' %}selected{% endif %}>Градиент</option><option value="image" {% if appearance.background_mode=='image' %}selected{% endif %}>Моя картинка</option></select></label>
+<label>Фоновое изображение<input type="file" name="background_image" accept=".jpg,.jpeg,.png,.webp"></label>
+{% if appearance.background_image_url %}<label class="inline-check"><input type="checkbox" name="remove_background" value="1"> Удалить загруженный фон</label>{% endif %}
+<label>Шрифт сайта<select name="font_family"><option value="sans" {% if appearance.font_family=='sans' %}selected{% endif %}>Современный</option><option value="serif" {% if appearance.font_family=='serif' %}selected{% endif %}>Книжный</option><option value="rounded" {% if appearance.font_family=='rounded' %}selected{% endif %}>Мягкий</option></select></label>
+<label>Размер текста <output id="font-size-value">{{ appearance.font_size }} px</output><input id="font-size-control" type="range" name="font_size" min="14" max="22" value="{{ appearance.font_size }}"></label>
+<label>Межстрочный интервал <output id="line-height-value">{{ appearance.line_height }}</output><input id="line-height-control" type="range" name="line_height" min="1.3" max="2.2" step="0.1" value="{{ appearance.line_height }}"></label>
+<label>Ширина текста в читалке<select name="reading_width"><option value="narrow" {% if appearance.reading_width=='narrow' %}selected{% endif %}>Узкая</option><option value="normal" {% if appearance.reading_width=='normal' %}selected{% endif %}>Обычная</option><option value="wide" {% if appearance.reading_width=='wide' %}selected{% endif %}>Широкая</option></select></label>
+<label>Вид карточек<select name="card_style"><option value="classic" {% if appearance.card_style=='classic' %}selected{% endif %}>Классический</option><option value="minimal" {% if appearance.card_style=='minimal' %}selected{% endif %}>Минималистичный</option><option value="glass" {% if appearance.card_style=='glass' %}selected{% endif %}>Стеклянный</option></select></label>
+</div>
+<div class="settings-preview"><span class="preview-cover">MY<br>LIBRARY</span><div><strong>Предпросмотр оформления</strong><p>Так будут выглядеть карточки и элементы вашей библиотеки.</p></div></div>
+<button class="settings-save" type="submit">Сохранить оформление</button>
+</form>
+<form class="settings-card" method="post" action="/settings/profile" enctype="multipart/form-data" id="profile-visuals">
+<h2>Мой профиль</h2><div class="settings-grid"><label>Аватар профиля<input type="file" name="avatar" accept=".jpg,.jpeg,.png,.webp">{% if appearance.avatar_url %}<img class="settings-avatar-preview" src="{{ appearance.avatar_url }}" alt="Текущий аватар">{% endif %}</label><label>Обложка профиля<input type="file" name="profile_cover" accept=".jpg,.jpeg,.png,.webp">{% if appearance.profile_cover_url %}<img class="settings-cover-preview" src="{{ appearance.profile_cover_url }}" alt="Текущая обложка">{% endif %}</label></div><button class="settings-save" type="submit">Сохранить профиль</button>
+</form>
+</main>
+<footer class="site-footer"><span>{{ site_config.site_name }}</span><a href="/help">Помощь</a><a href="/privacy">Конфиденциальность</a></footer>
+<script>const range=document.getElementById('font-size-control');const output=document.getElementById('font-size-value');range?.addEventListener('input',()=>output.textContent=range.value+' px');const lh=document.getElementById('line-height-control');const lho=document.getElementById('line-height-value');lh?.addEventListener('input',()=>lho.textContent=lh.value);</script>
+</body></html>

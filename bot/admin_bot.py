@@ -20,7 +20,7 @@ from aiogram.types import (
 
 from .config import ADMIN_ID, BOT_TOKEN, UPLOADS_DIR
 from .database import SessionLocal
-from .models import Book, BookRequest, UserNotification
+from .models import Book, BookRequest, User, UserNotification, AdminAction
 
 
 router = Router()
@@ -92,6 +92,12 @@ def panel_keyboard():
                 InlineKeyboardButton(
                     text="📊 Статистика",
                     callback_data="admin:stats"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📦 Массовая загрузка (до 100+ книг)",
+                    callback_data="bulk:start"
                 )
             ],
             [
@@ -401,6 +407,7 @@ async def send_books(message: Message):
     with SessionLocal() as db:
         books = (
             db.query(Book)
+            .filter(Book.is_deleted.is_(False))
             .order_by(Book.id.desc())
             .limit(50)
             .all()
@@ -472,7 +479,7 @@ async def list_command(message: Message):
 
 async def send_stats(message: Message):
     with SessionLocal() as db:
-        total = db.query(Book).count()
+        total = db.query(Book).filter(Book.is_deleted.is_(False)).count()
 
         categories = (
             db.query(Book.category)
@@ -574,11 +581,8 @@ async def delete_book(callback: CallbackQuery):
             await callback.answer("Книга не найдена.", show_alert=True)
             return
 
-        for filename in (book.cover, book.file):
-            if filename and Path(filename).name == filename:
-                (UPLOADS_DIR / filename).unlink(missing_ok=True)
-
-        db.delete(book)
+        book.is_deleted = True
+        db.add(AdminAction(action="book_to_trash_telegram", details=f"book_id={book_id}; title={book.title}"))
         db.commit()
 
     await callback.answer("Книга удалена!")
@@ -680,6 +684,8 @@ async def order_accept_callback(callback: CallbackQuery):
             )
 
         order.status = "accepted"
+        linked_user = db.get(User, order.user_id) if order.user_id else None
+        telegram_user_id = linked_user.telegram_id if linked_user else None
 
         save_order_notification(
             db,
@@ -691,6 +697,12 @@ async def order_accept_callback(callback: CallbackQuery):
             ),
         )
         db.commit()
+
+    if telegram_user_id:
+        try:
+            await callback.bot.send_message(telegram_user_id, f"✅ Ваш заказ №{order_id} «{order.book_title}» принят. Мы сообщим, когда книга появится в библиотеке.")
+        except Exception:
+            pass
 
     if callback.message:
         await callback.message.edit_reply_markup(
@@ -725,6 +737,8 @@ async def order_reject_callback(callback: CallbackQuery):
             )
 
         order.status = "rejected"
+        linked_user = db.get(User, order.user_id) if order.user_id else None
+        telegram_user_id = linked_user.telegram_id if linked_user else None
 
         save_order_notification(
             db,
@@ -733,6 +747,12 @@ async def order_reject_callback(callback: CallbackQuery):
             f"К сожалению, заказ «{order.book_title}» не может быть выполнен.",
         )
         db.commit()
+
+    if telegram_user_id:
+        try:
+            await callback.bot.send_message(telegram_user_id, f"❌ Ваш заказ №{order_id} «{order.book_title}» отклонён.")
+        except Exception:
+            pass
 
     if callback.message:
         await callback.message.edit_reply_markup(reply_markup=None)
@@ -780,6 +800,8 @@ async def order_done_callback(callback: CallbackQuery):
             )
 
         order.status = "completed"
+        linked_user = db.get(User, order.user_id) if order.user_id else None
+        telegram_user_id = linked_user.telegram_id if linked_user else None
 
         save_order_notification(
             db,
@@ -792,6 +814,12 @@ async def order_done_callback(callback: CallbackQuery):
             book_id=book.id,
         )
         db.commit()
+
+    if telegram_user_id:
+        try:
+            await callback.bot.send_message(telegram_user_id, f"📚 Заказ №{order_id} выполнен! Книга «{book.title}» доступна в My Library.")
+        except Exception:
+            pass
 
     if callback.message:
         await callback.message.edit_reply_markup(reply_markup=None)
@@ -822,4 +850,35 @@ def build_bot():
 
     dp.include_router(router)
 
+    from .bulk_import import router as bulk_import_router
+    dp.include_router(bulk_import_router)
+
+    from .reader_bot import router as reader_router
+    dp.include_router(reader_router)
+
     return bot, dp
+
+
+@router.message(Command("users"))
+async def admin_users_command(message: Message):
+    with SessionLocal() as db:
+        total = db.query(User).count()
+        blocked = db.query(User).filter(User.is_blocked.is_(True)).count()
+        recent = db.query(User).order_by(User.created_at.desc()).limit(15).all()
+        lines = [f"👥 <b>Пользователи: {total}</b> · Заблокировано: {blocked}"]
+        for user in recent:
+            status = "⛔" if user.is_blocked else "✅"
+            lines.append(f"{status} <code>{user.id}</code> · {html.escape(user.username)} · {html.escape(user.email)}")
+    await message.answer("\n".join(lines), parse_mode="HTML")
+
+
+@router.message(Command("orders"))
+async def admin_orders_command(message: Message):
+    with SessionLocal() as db:
+        orders = db.query(BookRequest).filter(BookRequest.status == "pending").order_by(BookRequest.created_at.desc()).limit(20).all()
+        if not orders:
+            return await message.answer("📭 Новых заявок нет.")
+        lines = ["📨 <b>Ожидающие заявки</b>"]
+        for order in orders:
+            lines.append(f"\n№{order.id} · {html.escape(order.book_title)} — {html.escape(order.author or 'Автор не указан')}")
+    await message.answer("\n".join(lines), parse_mode="HTML")

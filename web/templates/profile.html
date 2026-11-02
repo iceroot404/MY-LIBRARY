@@ -1,31 +1,42 @@
 
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" data-theme="{{ appearance.theme }}" data-background="{{ appearance.background_mode }}" data-font="{{ appearance.font_family }}" data-card-style="{{ appearance.card_style }}" data-reading-width="{{ appearance.reading_width }}" style="--user-accent: {{ appearance.accent_color }}; --user-font-size: {{ appearance.font_size }}px; --user-line-height: {{ appearance.line_height }}; --user-reading-width: {{ appearance.reading_width }};{% if appearance.background_mode == 'image' and appearance.background_image_url %} --user-bg-image: url('{{ appearance.background_image_url }}');{% endif %}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Личный кабинет — My Library</title>
+    <title>Личный кабинет — {{ site_config.site_name }}</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="manifest" href="/static/manifest.webmanifest">
     <link rel="stylesheet" href="/static/css/account.css">
+    <link rel="stylesheet" href="/static/css/personalization.css?v=1">
 <style>
 .notification-card{margin:15px 0;padding:18px;border:1px solid #ddd;border-radius:12px}
 .notification-count{background:#416d58;color:white;padding:3px 9px;border-radius:20px}
 .notification-read-button{padding:8px 12px;border:0;border-radius:8px;cursor:pointer}
 </style>
+<style>
+.shelf-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:15px 0}
+.shelf-tabs button{border:1px solid var(--line);background:var(--surface);padding:9px 13px;border-radius:20px;cursor:pointer;color:var(--ink)}
+.shelf-tabs button.active{background:var(--green);color:#fff}
+.summary-mini{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px}
+.advanced-profile-tools{border:1px solid var(--line);border-radius:16px;padding:20px;margin:20px 0}.goal-form,.advanced-profile-tools form{display:flex;gap:12px;flex-wrap:wrap;align-items:end}.goal-form label{display:grid;gap:5px}.goal-form input,.advanced-profile-tools input:not([type=checkbox]){padding:10px;border:1px solid var(--line);border-radius:8px}.advanced-profile-tools button{padding:10px 14px;border:0;border-radius:9px;cursor:pointer}.goal-progress{height:10px;background:#ddd;border-radius:99px;overflow:hidden}.goal-progress span{display:block;height:100%;background:#416d58}.advanced-item{padding:12px 0;border-bottom:1px solid var(--line)}
+</style>
+{% if site_config.favicon_url %}<link rel="icon" href="{{ site_config.favicon_url }}">{% endif %}
 </head>
 <body class="profile-page">
     <header class="profile-header">
-        <a class="account-brand" href="/">L · MY LIBRARY</a>
+        <a class="account-brand" href="/">{% if site_config.logo_url %}<img class="brand-logo" src="{{ site_config.logo_url }}" alt="">{% else %}L ·{% endif %} {{ site_config.site_name }}</a>
         <div class="profile-nav">
             <a href="/">Библиотека</a>
+            <a href="/settings">Моё оформление</a>
             <a href="/logout">Выйти ↗</a>
         </div>
     </header>
 
     <main class="profile-main">
-        <section class="profile-welcome">
+        <section class="profile-welcome{% if appearance.profile_cover_url %} has-profile-cover{% endif %}" {% if appearance.profile_cover_url %}style="--profile-cover:url('{{ appearance.profile_cover_url }}')"{% endif %}>
             <div class="profile-avatar">
-                {{ user.username[:1]|upper }}
+                {% if appearance.avatar_url %}<img src="{{ appearance.avatar_url }}" alt="Аватар {{ user.username }}">{% else %}{{ user.username[:1]|upper }}{% endif %}
             </div>
 
             <div>
@@ -36,6 +47,11 @@
         </section>
 
         
+        <section class="profile-section appearance-shortcut">
+            <p class="eyebrow">ВАШ СТИЛЬ</p><h2>Настройте свою библиотеку</h2>
+            <p>Тема, цвет, фон, шрифт и оформление карточек сохраняются отдельно для вашего аккаунта.</p>
+            <a class="appearance-open" href="/settings">Открыть настройки оформления →</a>
+        </section>
         <section class="profile-section notifications-section">
             <p class="eyebrow">ВАЖНЫЕ СООБЩЕНИЯ</p>
             <h2>Уведомления 🔔
@@ -66,7 +82,37 @@
             {% endfor %}
         </section>
 
-<section class="profile-stats">
+<section class="profile-section advanced-profile-tools">
+            <p class="eyebrow">ВАШ ПЛАН</p><h2>Цель чтения</h2>
+            <div id="reading-goal-summary">Загружаем статистику…</div>
+            <form id="reading-goal-form" class="goal-form">
+                <label>Книг за год <input name="target_books" type="number" min="1" max="1000" value="12" required></label>
+                <label>Минут чтения за год <input name="target_minutes" type="number" min="0" max="2000000" value="0"></label>
+                <button type="submit">Сохранить цель</button><span id="goal-feedback" role="status"></span>
+            </form>
+        </section>
+        <section class="profile-section advanced-profile-tools">
+            <p class="eyebrow">АКТИВНОСТЬ</p><h2>Календарь чтения</h2>
+            <div id="reading-calendar">Загружаем календарь…</div>
+        </section>
+        <section class="profile-section advanced-profile-tools">
+            <p class="eyebrow">СВЯЗЬ С TELEGRAM</p><h2>Уведомления в Telegram</h2>
+            <p>Создай код и отправь боту команду, которую он покажет. После связывания можно получать уведомления в Telegram.</p>
+            <button id="telegram-link-button" type="button">Создать код подключения</button>
+            <p id="telegram-link-info" role="status"></p>
+        </section>
+        <section class="profile-section advanced-profile-tools">
+            <p class="eyebrow">ВАШИ ПОДБОРКИ</p><h2>Мои коллекции</h2>
+            <form id="collection-form"><input name="title" maxlength="120" placeholder="Название коллекции" required><input name="description" maxlength="1000" placeholder="Описание"><label><input type="checkbox" name="is_shared"> Сделать общей по ссылке</label><button type="submit">Создать</button></form>
+            <div id="collection-list">Загружаем коллекции…</div>
+        </section>
+        <section class="profile-section advanced-profile-tools">
+            <p class="eyebrow">СООБЩЕСТВО</p><h2>Книжные клубы</h2>
+            <form id="club-form"><input name="title" maxlength="120" placeholder="Название клуба" required><input name="description" maxlength="2000" placeholder="О чём клуб"><button type="submit">Создать клуб</button></form>
+            <div id="club-list">Загружаем клубы…</div>
+        </section>
+
+        <section class="profile-stats">
             <article>
                 <span>❤️</span>
                 <strong>{{ favorites|length }}</strong>
@@ -84,6 +130,24 @@
                 <strong>{{ reviews|length }}</strong>
                 <small>Моих отзывов</small>
             </article>
+        </section>
+
+
+        <section class="profile-section bookshelf-section">
+            <p class="eyebrow">МОЯ БИБЛИОТЕКА</p>
+            <h2>Книжные полки</h2>
+            <div class="shelf-tabs">
+                <button type="button" data-shelf-tab="want" class="active">Хочу прочитать</button>
+                <button type="button" data-shelf-tab="reading">Читаю</button>
+                <button type="button" data-shelf-tab="read">Прочитано</button>
+            </div>
+            <div id="shelf-items" class="profile-book-grid"><p class="empty-profile">Загружаем книжные полки…</p></div>
+        </section>
+
+        <section class="profile-section reading-summary-section">
+            <p class="eyebrow">МОЯ СТАТИСТИКА</p>
+            <h2>История чтения</h2>
+            <div id="reading-summary" class="profile-stats"><p class="empty-profile">Загружаем статистику…</p></div>
         </section>
 
         <section class="profile-section">
@@ -178,8 +242,11 @@
     </main>
 
     <footer class="site-footer">
-        <span>MY LIBRARY</span>
+        <span>{{ site_config.site_name }}</span>
         <span>Ваша история чтения.</span>
     </footer>
+<script src="/static/js/profile-features.js?v=1"></script>
+<script src="/static/js/profile-advanced.js?v=1"></script>
+<script src="/static/js/pwa.js?v=1"></script>
 </body>
 </html>

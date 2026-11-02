@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Админ-панель — My Library</title>
     <link rel="stylesheet" href="/static/css/admin.css">
+    <link rel="stylesheet" href="/static/css/personalization.css?v=1">
+    {% if site_config.favicon_url %}<link rel="icon" href="{{ site_config.favicon_url }}">{% endif %}
 <style>
 .orders-panel{margin:25px 0;padding:24px}
 .order-row{padding:17px 0;border-bottom:1px solid #ddd;gap:15px}
@@ -12,13 +14,21 @@
 .order-actions form{margin:0}
 .order-actions button{padding:9px 13px;cursor:pointer}
 </style>
+<style>
+.admin-extra-grid{margin:24px 0}
+.admin-extra-grid .panel,.admin-top-books{padding:22px}
+.admin-user-row,.admin-mod-row,.admin-top-row{padding:12px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:14px;align-items:center;font-size:13px}
+.admin-user-row button,.admin-mod-row button{border:0;border-radius:8px;padding:8px 10px;cursor:pointer}
+.admin-feature-muted{color:var(--muted);font-size:12px}
+</style>
+<link rel="manifest" href="/static/manifest.webmanifest">
 </head>
 <body class="admin-page">
     <aside class="sidebar">
         <a class="brand" href="/admin">
-            <span class="brand-mark">L</span>
+            {% if site_config.logo_url %}<img class="admin-brand-logo" src="{{ site_config.logo_url }}" alt="">{% else %}<span class="brand-mark">L</span>{% endif %}
             <span>
-                MY LIBRARY
+                {{ site_config.site_name }}
                 <small>CONTROL CENTER</small>
             </span>
         </a>
@@ -30,7 +40,10 @@
         </a>
 
         <a class="nav" href="/admin#orders">📚 <span>Заказы читателей</span></a>
-<a class="nav" href="/">
+        <a class="nav" href="/admin#library-analytics">📊 <span>Статистика</span></a>
+        <a class="nav" href="/admin#admin-users">👥 <span>Читатели и модерация</span></a>
+        <a class="nav" href="/admin#design">🎨 <span>Дизайн сайта</span></a>
+        <a class="nav" href="/">
             ↗ <span>Открыть сайт</span>
         </a>
 
@@ -56,6 +69,18 @@
 
             <div class="avatar">A</div>
         </header>
+
+
+        <section class="stats" id="library-analytics">
+            <article class="stat-card"><p>Читатели</p><strong>{{ total_users }}</strong><small>Зарегистрировано</small></article>
+            <article class="stat-card"><p>Просмотры книг</p><strong>{{ total_views }}</strong><small>Всего открытий</small></article>
+            <article class="stat-card"><p>Скачивания</p><strong>{{ total_downloads }}</strong><small>Всего загрузок</small></article>
+        </section>
+        <section class="content-grid admin-extra-grid" id="admin-users">
+            <article class="panel"><div class="panel-heading"><div><p class="eyebrow">ЧИТАТЕЛИ</p><h2>Управление аккаунтами</h2></div></div><div id="admin-users-list">Загрузка…</div></article>
+            <article class="panel"><div class="panel-heading"><div><p class="eyebrow">МОДЕРАЦИЯ</p><h2>Отзывы и жалобы</h2></div></div><div id="admin-moderation-list">Загрузка…</div></article>
+        </section>
+        <section class="panel admin-top-books"><div class="panel-heading"><div><p class="eyebrow">АНАЛИТИКА</p><h2>Популярные книги</h2></div></div><div id="admin-top-books">Загрузка…</div></section>
 
         <section class="stats">
             <article class="stat-card">
@@ -84,6 +109,23 @@
         </section>
 
         
+
+        <section class="panel site-design-panel" id="design">
+            <div class="panel-heading"><div><p class="eyebrow">ФИРМЕННЫЙ СТИЛЬ</p><h2>Настройка внешнего вида сайта</h2></div></div>
+            {% if request.query_params.get('design_saved') %}<p class="design-success">Настройки бренда сохранены.</p>{% endif %}
+            <form action="/admin/design" method="post" enctype="multipart/form-data" class="site-design-form">
+                <label>Название сайта<input name="site_name" maxlength="80" value="{{ site_config.site_name }}" required></label>
+                <label>Надпись над главным заголовком<input name="hero_eyebrow" maxlength="120" value="{{ site_config.hero_eyebrow }}"></label>
+                <label>Главный заголовок<input name="hero_title" maxlength="180" value="{{ site_config.hero_title }}"></label>
+                <label>Подзаголовок<textarea name="hero_subtitle" maxlength="240" rows="2">{{ site_config.hero_subtitle }}</textarea></label>
+                <label>Основной цвет<input name="accent_color" type="color" value="{{ site_config.accent_color }}"></label>
+                <label>Логотип (PNG/JPG/WEBP)<input name="logo" type="file" accept=".png,.jpg,.jpeg,.webp"></label>{% if site_config.logo_url %}<label class="inline-check"><input type="checkbox" name="remove_logo" value="1"> Удалить текущий логотип</label>{% endif %}
+                <label>Favicon<input name="favicon" type="file" accept=".png,.jpg,.jpeg,.webp"></label>{% if site_config.favicon_url %}<label class="inline-check"><input type="checkbox" name="remove_favicon" value="1"> Удалить текущий favicon</label>{% endif %}
+                <label>Фон главного баннера<input name="hero_background" type="file" accept=".png,.jpg,.jpeg,.webp"></label>{% if site_config.hero_background_url %}<label class="inline-check"><input type="checkbox" name="remove_hero_background" value="1"> Удалить фон баннера</label>{% endif %}
+                <button class="primary" type="submit">Сохранить дизайн сайта →</button>
+            </form>
+        </section>
+
         <section class="panel orders-panel" id="orders">
             <div class="panel-heading">
                 <div>
@@ -113,16 +155,7 @@
                 <div class="order-actions">
                     <form method="post" action="/admin/orders/{{ order.id }}/status">
                         <input type="hidden" name="status" value="accepted">
-                        <div class="field">
-<label>Связать с принятым заказом</label>
-<select name="order_id">
-<option value="">Без заказа</option>
-{% for order in available_orders %}
-<option value="{{ order.id }}">№{{ order.id }} — {{ order.book_title }} ({{ order.customer_name }})</option>
-{% endfor %}
-</select>
-</div>
-<button class="primary">Принять</button>
+                        <button class="primary">Принять</button>
                     </form>
                     <form method="post" action="/admin/orders/{{ order.id }}/status">
                         <input type="hidden" name="status" value="rejected">
@@ -215,6 +248,15 @@
                         </label>
                     </div>
 
+                    <div class="field order-link-field">
+                        <label>Связать с принятым заказом (необязательно)</label>
+                        <select name="order_id">
+                            <option value="">Без заказа</option>
+                            {% for order in available_orders %}
+                            <option value="{{ order.id }}">№{{ order.id }} — {{ order.book_title }} ({{ order.customer_name }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
                     <button class="primary">
                         Добавить в библиотеку <span>→</span>
                     </button>
@@ -274,6 +316,14 @@
             </article>
         </section>
 
+        <section class="panel" id="admin-tools-panel" style="margin-top:24px;padding:22px">
+            <div class="panel-heading"><div><p class="eyebrow">ИНСТРУМЕНТЫ</p><h2>Экспорт и журнал действий</h2></div></div>
+            <p><a class="primary" href="/api/admin/books/export.csv">Скачать каталог CSV</a></p>
+            <div id="admin-action-log">Загружаем последние действия…</div>
+            <div id="admin-trash-list"></div>
+            <div id="admin-book-reports"></div>
+        </section>
+
         <footer>
             MY LIBRARY <span>•</span> ADMIN CONSOLE
         </footer>
@@ -292,5 +342,7 @@
             });
         });
     </script>
+<script src="/static/js/admin-features.js?v=1"></script>
+<script src="/static/js/pwa.js"></script>
 </body>
 </html>

@@ -1,11 +1,11 @@
 
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" data-theme="{{ appearance.theme }}" data-background="{{ appearance.background_mode }}" data-font="{{ appearance.font_family }}" data-card-style="{{ appearance.card_style }}" data-reading-width="{{ appearance.reading_width }}" style="--user-accent: {{ appearance.accent_color }}; --user-font-size: {{ appearance.font_size }}px; --user-line-height: {{ appearance.line_height }}; --user-reading-width: {{ appearance.reading_width }};{% if appearance.background_mode == 'image' and appearance.background_image_url %} --user-bg-image: url('{{ appearance.background_image_url }}');{% endif %}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
-    <title>My Library — ваша цифровая библиотека</title>
+    <title>{{ site_config.site_name }} — ваша цифровая библиотека</title>
 
     <meta name="theme-color" content="#1d3029">
 
@@ -14,18 +14,21 @@
 
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
 
-    <link rel="stylesheet" href="/static/css/style.css?v=4">
+    <link rel="manifest" href="/static/manifest.webmanifest">
+    {% if site_config.favicon_url %}<link rel="icon" href="{{ site_config.favicon_url }}">{% else %}<link rel="icon" href="/static/icon.svg" type="image/svg+xml">{% endif %}
+    <link rel="stylesheet" href="/static/css/style.css?v=7">
+    <link rel="stylesheet" href="/static/css/personalization.css?v=1">
 </head>
 
 <body>
 
-    <header class="hero">
+    <header class="hero" {% if site_config.hero_background_url %}style="--site-hero-image:url('{{ site_config.hero_background_url }}')"{% endif %}>
 
         <nav class="nav-wrap">
 
             <a class="site-brand" href="/">
-                <span class="brand-mark">L</span>
-                MY LIBRARY
+                {% if site_config.logo_url %}<img class="brand-logo" src="{{ site_config.logo_url }}" alt="{{ site_config.site_name }}">{% else %}<span class="brand-mark">L</span>{% endif %}
+                {{ site_config.site_name }}
             </a>
 
             <div class="nav-actions">
@@ -63,9 +66,8 @@
                 <!-- Авторизация -->
                 {% if logged_in %}
 
-                    <a class="nav-auth nav-login" href="/profile">
-                        Мой кабинет
-                    </a>
+                    <a class="nav-auth nav-login" href="/profile">Мой кабинет</a>
+                    <a class="nav-auth nav-settings" href="/settings">Моё оформление</a>
 
                     <a class="nav-auth nav-register" href="/logout">
                         Выйти ↗
@@ -89,18 +91,11 @@
 
         <div class="hero-content">
 
-            <p class="eyebrow">
-                ВАША КОЛЛЕКЦИЯ ЗНАНИЙ
-            </p>
+            <p class="eyebrow">{{ site_config.hero_eyebrow }}</p>
 
-            <h1>
-                Истории, которые<br>
-                <em>остаются с вами.</em>
-            </h1>
+            <h1>{{ site_config.hero_title }}</h1>
 
-            <p class="hero-sub">
-                Откройте для себя следующую любимую книгу.
-            </p>
+            <p class="hero-sub">{{ site_config.hero_subtitle }}</p>
 
             <label class="search">
                 <span>⌕</span>
@@ -128,6 +123,19 @@
 
     <main class="wrap">
 
+        <section class="home-feature-row" aria-label="Подборки библиотеки">
+            <article class="home-feature-card book-of-day-card">
+                <p class="eyebrow">ВЫБОР БИБЛИОТЕКИ</p>
+                <h2>Книга дня</h2>
+                <div id="book-of-day" class="home-feature-content">Загружаем рекомендацию…</div>
+            </article>
+            <article class="home-feature-card recommendations-card">
+                <p class="eyebrow">ДЛЯ ВАС</p>
+                <h2>Может понравиться</h2>
+                <div id="recommendations" class="recommendation-list">Подбираем книги…</div>
+            </article>
+        </section>
+
         <div class="section-head">
 
             <div>
@@ -135,7 +143,16 @@
                 <h2>Исследуйте библиотеку</h2>
             </div>
 
-            <p id="count" class="count" aria-live="polite"></p>
+            <div class="catalog-controls">
+                <label for="sort-books">Сортировка</label>
+                <select id="sort-books">
+                    <option value="newest">Сначала новые</option>
+                    <option value="popular">Популярные</option>
+                    <option value="title">По названию</option>
+                    <option value="author">По автору</option>
+                </select>
+                <p id="count" class="count" aria-live="polite"></p>
+            </div>
 
         </div>
 
@@ -149,8 +166,19 @@
             Ничего не найдено.
             Попробуйте изменить поисковый запрос.
         </p>
+        <div id="compare-bar" class="compare-bar" hidden>
+            <span id="compare-count">Выбрано 0 книг</span>
+            <button type="button" id="compare-open">Сравнить</button>
+            <button type="button" id="compare-clear">Очистить</button>
+        </div>
 
     </main>
+
+    <dialog id="compare-modal" class="compare-modal">
+        <button type="button" class="close" id="compare-close" aria-label="Закрыть">×</button>
+        <h2>Сравнение книг</h2>
+        <div id="compare-content"></div>
+    </dialog>
 
     <dialog id="modal">
 
@@ -166,11 +194,17 @@
     </dialog>
 
     <footer class="site-footer">
-        <span>MY LIBRARY</span>
+        <span>{{ site_config.site_name }}</span>
         <span>Место для хороших историй.</span>
+        <nav class="footer-links" aria-label="Информация">
+            <a href="/help">Помощь</a><a href="/privacy">Конфиденциальность</a><a href="/terms">Правила</a><a href="/contact">Контакты</a>
+        </nav>
     </footer>
 
-    <script src="/static/js/app.js?v=4"></script>
+    <script>window.MY_LIBRARY_AUTHENTICATED = {{ 'true' if logged_in else 'false' }};</script>
+    <script src="/static/js/app.js?v=7"></script>
+    <script src="/static/js/home-features.js?v=1"></script>
+    <script src="/static/js/pwa.js?v=1"></script>
 
 </body>
 </html>

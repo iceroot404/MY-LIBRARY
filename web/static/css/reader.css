@@ -225,3 +225,19 @@
         font-size: 10px;
     }
 }
+
+
+#font-smaller, #font-larger, #add-bookmark {
+    border:1px solid #ffffff40; border-radius:20px; padding:8px 10px;
+    background:#ffffff12; color:#fff; cursor:pointer; font-size:11px;
+}
+.reader-bookmarks {
+    position:fixed; right:14px; bottom:14px; z-index:5;
+    max-width:260px; max-height:36vh; overflow:auto;
+    padding:12px 14px; border-radius:12px; border:1px solid var(--line);
+    background:var(--paper); color:var(--ink); box-shadow:0 8px 28px #0002;
+    font-size:12px;
+}
+.bookmark-row {display:flex; gap:8px; align-items:center; justify-content:space-between; margin-top:8px}
+.bookmark-row button {border:0;background:transparent;color:var(--green);cursor:pointer}
+@media(max-width:700px){.reader-bookmarks{max-width:190px;right:7px;bottom:7px}}

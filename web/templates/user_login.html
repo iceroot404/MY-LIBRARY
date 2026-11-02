@@ -1,16 +1,19 @@
 
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" data-theme="{{ appearance.theme }}" data-background="{{ appearance.background_mode }}" data-font="{{ appearance.font_family }}" data-card-style="{{ appearance.card_style }}" data-reading-width="{{ appearance.reading_width }}" style="--user-accent: {{ appearance.accent_color }}; --user-font-size: {{ appearance.font_size }}px; --user-line-height: {{ appearance.line_height }}; --user-reading-width: {{ appearance.reading_width }};{% if appearance.background_mode == 'image' and appearance.background_image_url %} --user-bg-image: url('{{ appearance.background_image_url }}');{% endif %}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Вход — My Library</title>
+    <title>Вход — {{ site_config.site_name }}</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <link rel="stylesheet" href="/static/css/account.css">
+    <link rel="stylesheet" href="/static/css/personalization.css?v=1">
+<link rel="manifest" href="/static/manifest.webmanifest">
+{% if site_config.favicon_url %}<link rel="icon" href="{{ site_config.favicon_url }}">{% endif %}
 </head>
 <body class="account-page">
     <main class="account-card">
-        <a href="/" class="account-brand">L · MY LIBRARY</a>
+        <a href="/" class="account-brand">{% if site_config.logo_url %}<img class="brand-logo" src="{{ site_config.logo_url }}" alt="">{% else %}L ·{% endif %} {{ site_config.site_name }}</a>
 
         <p class="eyebrow">ЛИЧНЫЙ КАБИНЕТ</p>
         <h1>С возвращением!</h1>
@@ -51,5 +54,6 @@
 
         <a href="/" class="account-back">← Вернуться в библиотеку</a>
     </main>
+<script src="/static/js/pwa.js"></script>
 </body>
 </html>

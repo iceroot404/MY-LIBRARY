@@ -11,6 +11,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import uvicorn
+from sqlalchemy import func
 
 from aiogram.exceptions import TelegramAPIError
 from fastapi import (
@@ -38,11 +39,14 @@ from bot.config import (
     ADMIN_LOGIN,
     ADMIN_PASSWORD,
     SESSION_SECRET,
+    COOKIE_SECURE,
     UPLOADS_DIR,
     HOST,
     PORT,
 )
 from bot.database import SessionLocal, init_db
+from feature_routes import router as feature_router
+from extended_routes import router as extended_feature_router
 from bot.models import (
     Book,
     User,
@@ -51,6 +55,9 @@ from bot.models import (
     Review,
     BookRequest,
     UserNotification,
+    AdminAction,
+    UserAppearance,
+    SiteSetting,
 )
 
 
@@ -112,7 +119,10 @@ def get_current_user(request: Request):
         return None
 
     with SessionLocal() as db:
-        return db.get(User, int(user_id))
+        user = db.get(User, int(user_id))
+        if not user or getattr(user, "is_blocked", False):
+            return None
+        return user
 
 
 def require_user(request: Request):
@@ -184,6 +194,104 @@ def safe_upload_path(filename: str):
 
 
 # =========================
+# ПЕРСОНАЛИЗАЦИЯ И ФИРМЕННЫЙ СТИЛЬ
+# =========================
+
+DEFAULT_APPEARANCE = {
+    "theme": "light", "accent_color": "#416d58", "background_mode": "plain",
+    "background_image": None, "background_image_url": None,
+    "font_family": "sans", "font_size": 16, "line_height": 1.8, "reading_width": "normal", "card_style": "classic",
+    "avatar": None, "avatar_url": None, "profile_cover": None, "profile_cover_url": None,
+}
+DEFAULT_SITE_CONFIG = {
+    "site_name": "MY LIBRARY",
+    "hero_eyebrow": "ВАША КОЛЛЕКЦИЯ ЗНАНИЙ",
+    "hero_title": "Истории, которые остаются с вами.",
+    "hero_subtitle": "Откройте для себя следующую любимую книгу.",
+    "accent_color": "#416d58",
+    "logo_file": None, "logo_url": None,
+    "favicon_file": None, "favicon_url": None,
+    "hero_background_file": None, "hero_background_url": None,
+}
+ALLOWED_THEMES = {"light", "dark", "sepia"}
+ALLOWED_BACKGROUNDS = {"plain", "paper", "gradient", "image"}
+ALLOWED_FONTS = {"sans", "serif", "rounded"}
+ALLOWED_CARD_STYLES = {"classic", "minimal", "glass"}
+ALLOWED_READING_WIDTHS = {"narrow", "normal", "wide"}
+COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def _upload_url(filename: str | None) -> str | None:
+    return f"/static/uploads/{filename}" if filename else None
+
+
+def get_site_config() -> dict:
+    result = dict(DEFAULT_SITE_CONFIG)
+    with SessionLocal() as db:
+        for row in db.query(SiteSetting).all():
+            if row.key in result:
+                result[row.key] = row.value or None
+    for file_key, url_key in (("logo_file", "logo_url"), ("favicon_file", "favicon_url"), ("hero_background_file", "hero_background_url")):
+        result[url_key] = _upload_url(result.get(file_key))
+    return result
+
+
+def get_user_appearance(user_id: int | None) -> dict:
+    result = dict(DEFAULT_APPEARANCE)
+    result["accent_color"] = get_site_config().get("accent_color") or result["accent_color"]
+    if user_id:
+        with SessionLocal() as db:
+            pref = db.query(UserAppearance).filter(UserAppearance.user_id == user_id).first()
+            if pref:
+                for key in ("theme", "accent_color", "background_mode", "background_image", "font_family", "font_size", "line_height", "reading_width", "card_style", "avatar", "profile_cover"):
+                    result[key] = getattr(pref, key)
+    result["background_image_url"] = _upload_url(result.get("background_image"))
+    result["avatar_url"] = _upload_url(result.get("avatar"))
+    result["profile_cover_url"] = _upload_url(result.get("profile_cover"))
+    return result
+
+
+def render_page(request: Request, template_name: str, context: dict | None = None, **kwargs):
+    current_user = get_current_user(request)
+    base_context = {
+        "site_config": get_site_config(),
+        "appearance": get_user_appearance(current_user.id if current_user else None),
+        "current_user": current_user,
+        "logged_in": current_user is not None,
+    }
+    if context:
+        base_context.update(context)
+    return templates.TemplateResponse(request, template_name, base_context, **kwargs)
+
+
+def save_site_values(values: dict[str, str]) -> None:
+    with SessionLocal() as db:
+        for key, value in values.items():
+            row = db.get(SiteSetting, key)
+            if row is None:
+                db.add(SiteSetting(key=key, value=value or ""))
+            else:
+                row.value = value or ""
+        db.commit()
+
+
+async def store_small_image(upload: UploadFile | None) -> str | None:
+    if not upload or not upload.filename:
+        return None
+    suffix = Path(upload.filename).suffix.lower()
+    if suffix not in ALLOWED_IMAGE_EXTENSIONS:
+        raise HTTPException(400, "Изображение должно быть JPG, PNG или WEBP")
+    content = await upload.read(5 * 1024 * 1024 + 1)
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(413, "Изображение больше 5 МБ")
+    if not content:
+        raise HTTPException(400, "Пустое изображение")
+    filename = f"{uuid4().hex}{suffix}"
+    (UPLOADS_DIR / filename).write_bytes(content)
+    return filename
+
+
+# =========================
 # ЗАПУСК САЙТА И TELEGRAM
 # =========================
 
@@ -229,7 +337,7 @@ app.add_middleware(
     SessionMiddleware,
     secret_key=SESSION_SECRET,
     same_site="lax",
-    https_only=False,
+    https_only=COOKIE_SECURE,
     max_age=60 * 60 * 24 * 14,
 )
 
@@ -240,22 +348,32 @@ app.mount(
 )
 
 
+@app.get("/sw.js")
+def service_worker():
+    return FileResponse(
+        BASE_DIR / "web" / "static" / "sw.js",
+        media_type="application/javascript",
+        headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"},
+    )
+
+app.include_router(feature_router)
+app.include_router(extended_feature_router)
+
+
 # =========================
 # ГЛАВНАЯ СТРАНИЦА
 # =========================
 
 @app.get("/orders", response_class=HTMLResponse)
 def orders_page(request: Request):
-    return templates.TemplateResponse(
-        "orders.html", {"request": request}
-    )
+    return render_page(request, "orders.html")
 
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     user = get_current_user(request)
 
-    return templates.TemplateResponse(
+    return render_page(
         request,
         "index.html",
         {
@@ -334,14 +452,23 @@ def api_books(
     request: Request,
     q: str = "",
     category: str = "",
+    sort: str = "newest",
 ):
     with SessionLocal() as db:
-        query = db.query(Book)
+        query = db.query(Book).filter(Book.is_deleted.is_(False))
 
         if category:
             query = query.filter(Book.category == category)
 
-        books = query.order_by(Book.id.desc()).all()
+        if sort == "popular":
+            query = query.order_by(Book.view_count.desc(), Book.id.desc())
+        elif sort == "title":
+            query = query.order_by(Book.title.asc())
+        elif sort == "author":
+            query = query.order_by(Book.author.asc(), Book.title.asc())
+        else:
+            query = query.order_by(Book.created_at.desc(), Book.id.desc())
+        books = query.all()
 
         categories = sorted({
             item[0]
@@ -389,6 +516,7 @@ def popular_books():
     with SessionLocal() as db:
         books = (
             db.query(Book)
+            .filter(Book.is_deleted.is_(False))
             .order_by(Book.view_count.desc(), Book.id.desc())
             .limit(12)
             .all()
@@ -405,7 +533,7 @@ def popular_books():
 
 @app.get("/register", response_class=HTMLResponse)
 def register_page(request: Request):
-    return templates.TemplateResponse(
+    return render_page(
         request,
         "register.html",
         {"error": ""},
@@ -427,7 +555,7 @@ def register(
         username.casefold() == ADMIN_LOGIN.casefold()
         or email.casefold() == ADMIN_LOGIN.casefold()
     ):
-        return templates.TemplateResponse(
+        return render_page(
             request,
             "register.html",
             {"error": "Это имя зарезервировано."},
@@ -435,7 +563,7 @@ def register(
         )
 
     if len(username) < 3 or len(username) > 40:
-        return templates.TemplateResponse(
+        return render_page(
             request,
             "register.html",
             {"error": "Имя должно содержать от 3 до 40 символов"},
@@ -443,7 +571,7 @@ def register(
         )
 
     if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
-        return templates.TemplateResponse(
+        return render_page(
             request,
             "register.html",
             {"error": "Введите корректный email"},
@@ -451,7 +579,7 @@ def register(
         )
 
     if len(password) < 8:
-        return templates.TemplateResponse(
+        return render_page(
             request,
             "register.html",
             {"error": "Пароль должен содержать минимум 8 символов"},
@@ -469,7 +597,7 @@ def register(
         )
 
         if exists:
-            return templates.TemplateResponse(
+            return render_page(
                 request,
                 "register.html",
                 {"error": "Такой пользователь или email уже существует"},
@@ -504,7 +632,7 @@ def user_login_page(request: Request):
     if get_current_user(request):
         return RedirectResponse("/profile", status_code=303)
 
-    return templates.TemplateResponse(
+    return render_page(
         request,
         "user_login.html",
         {"error": ""},
@@ -543,11 +671,18 @@ def user_login(
             .first()
         )
 
+        if user and getattr(user, "is_blocked", False):
+            return render_page(
+                request, "user_login.html",
+                {"error": "Ваш аккаунт временно заблокирован. Обратитесь к администрации."},
+                status_code=403,
+            )
+
         if not user or not verify_password(
             password,
             user.password_hash,
         ):
-            return templates.TemplateResponse(
+            return render_page(
                 request,
                 "user_login.html",
                 {"error": "Неверный логин или пароль"},
@@ -599,19 +734,19 @@ def profile(request: Request):
         favorite_rows = (
             db.query(Book)
             .join(Favorite, Favorite.book_id == Book.id)
-            .filter(Favorite.user_id == user.id)
+            .filter(Favorite.user_id == user.id, Book.is_deleted.is_(False))
             .order_by(Favorite.id.desc()).all()
         )
         progress_rows = (
             db.query(ReadingProgress, Book)
             .join(Book, Book.id == ReadingProgress.book_id)
-            .filter(ReadingProgress.user_id == user.id)
+            .filter(ReadingProgress.user_id == user.id, Book.is_deleted.is_(False))
             .order_by(ReadingProgress.updated_at.desc()).all()
         )
         review_rows = (
             db.query(Review, Book)
             .join(Book, Book.id == Review.book_id)
-            .filter(Review.user_id == user.id)
+            .filter(Review.user_id == user.id, Book.is_deleted.is_(False))
             .order_by(Review.updated_at.desc()).all()
         )
 
@@ -646,7 +781,7 @@ def profile(request: Request):
             ).count()
         )
 
-    return templates.TemplateResponse(
+    return render_page(
         request,
         "profile.html",
         {
@@ -729,6 +864,22 @@ def remove_favorite(
     return {"ok": True, "is_favorite": False}
 
 
+@app.get("/authors/{author}", response_class=HTMLResponse)
+def author_page(author: str, request: Request):
+    name = author.strip()[:255]
+    with SessionLocal() as db:
+        candidates = db.query(Book).filter(
+            Book.is_deleted.is_(False),
+        ).order_by(Book.title.asc()).all()
+        books = [book for book in candidates if book.author.casefold() == name.casefold()]
+        if not books:
+            raise HTTPException(404, "Книги этого автора не найдены")
+        return render_page(
+            request, "author.html",
+            {"author": name, "books": [book.to_dict() for book in books]},
+        )
+
+
 # =========================
 # ОНЛАЙН-ЧТЕНИЕ
 # =========================
@@ -738,7 +889,7 @@ def read_book(book_id: int, request: Request):
     with SessionLocal() as db:
         book = db.get(Book, book_id)
 
-        if not book or not book.file:
+        if not book or book.is_deleted or not book.file:
             raise HTTPException(404, "Файл книги не найден")
 
         extension = Path(book.file).suffix.lower().lstrip(".")
@@ -754,7 +905,7 @@ def read_book(book_id: int, request: Request):
         book.view_count += 1
         db.commit()
 
-        return templates.TemplateResponse(
+        return render_page(
             request,
             "reader.html",
             {
@@ -771,7 +922,7 @@ def download_book(book_id: int):
     with SessionLocal() as db:
         book = db.get(Book, book_id)
 
-        if not book or not book.file:
+        if not book or book.is_deleted or not book.file:
             raise HTTPException(404, "Файл книги не найден")
 
         path = safe_upload_path(book.file)
@@ -959,8 +1110,9 @@ def admin_logout(
 
 
 @app.post("/admin/orders/{order_id}/status")
-def change_order_status(
+async def change_order_status(
     order_id: int,
+    request: Request,
     status: str = Form(...),
     _: bool = Depends(require_admin),
 ):
@@ -975,7 +1127,10 @@ def change_order_status(
             raise HTTPException(400, "Заказ уже обработан")
 
         order.status = status
+        telegram_id = None
         if order.user_id:
+            linked_user = db.get(User, order.user_id)
+            telegram_id = linked_user.telegram_id if linked_user else None
             if status == "accepted":
                 title = "Ваш заказ принят!"
                 message = (
@@ -991,7 +1146,15 @@ def change_order_status(
                 title=title,
                 message=message,
             ))
+        db.add(AdminAction(action="order_status", details=f"order_id={order_id}; status={status}"))
         db.commit()
+
+    bot = getattr(request.app.state, "telegram_bot", None)
+    if bot and telegram_id:
+        try:
+            await bot.send_message(telegram_id, message)
+        except Exception as error:
+            print("Не удалось отправить уведомление читателю в Telegram:", error)
 
     return RedirectResponse("/admin#orders", status_code=303)
 
@@ -1002,10 +1165,14 @@ def admin_page(request: Request):
         return RedirectResponse("/admin/login", status_code=303)
 
     with SessionLocal() as db:
-        total = db.query(Book).count()
+        total = db.query(Book).filter(Book.is_deleted.is_(False)).count()
         categories = db.query(Book.category).distinct().count()
+        total_users = db.query(User).count()
+        blocked_users = db.query(User).filter(User.is_blocked.is_(True)).count()
+        total_views = db.query(func.coalesce(func.sum(Book.view_count), 0)).filter(Book.is_deleted.is_(False)).scalar()
+        total_downloads = db.query(func.coalesce(func.sum(Book.download_count), 0)).filter(Book.is_deleted.is_(False)).scalar()
         books = (
-            db.query(Book).order_by(Book.id.desc()).limit(100).all()
+            db.query(Book).filter(Book.is_deleted.is_(False)).order_by(Book.id.desc()).limit(100).all()
         )
         rows = (
             db.query(BookRequest, User)
@@ -1036,7 +1203,7 @@ def admin_page(request: Request):
             .order_by(BookRequest.id.desc()).all()
         )
 
-    return templates.TemplateResponse(
+    return render_page(
         request,
         "admin.html",
         {
@@ -1045,6 +1212,10 @@ def admin_page(request: Request):
             "books": books,
             "orders": orders,
             "available_orders": available_orders,
+            "total_users": total_users,
+            "blocked_users": blocked_users,
+            "total_views": total_views,
+            "total_downloads": total_downloads,
         },
     )
 
@@ -1075,6 +1246,8 @@ async def admin_create_book(
         if book_file and book_file.filename else None
     )
 
+    telegram_notice = None
+    telegram_user_id = None
     with SessionLocal() as db:
         linked_order = None
         if order_id.strip():
@@ -1104,8 +1277,27 @@ async def admin_create_book(
 
         if linked_order:
             linked_order.book_id = book.id
+            linked_order.status = "completed"
+            if linked_order.user_id:
+                db.add(UserNotification(
+                    user_id=linked_order.user_id,
+                    title="Запрошенная книга добавлена",
+                    message=f"Книга «{book.title}» теперь доступна в My Library.",
+                    book_id=book.id,
+                ))
+                linked_user = db.get(User, linked_order.user_id)
+                telegram_user_id = linked_user.telegram_id if linked_user else None
+                telegram_notice = f"📚 Книга «{book.title}» добавлена в My Library!"
 
+        db.add(AdminAction(action="book_created", details=f"book_id={book.id}; title={book.title}"))
         db.commit()
+
+    bot = getattr(request.app.state, "telegram_bot", None)
+    if bot and telegram_user_id and telegram_notice:
+        try:
+            await bot.send_message(telegram_user_id, telegram_notice)
+        except Exception as error:
+            print("Не удалось отправить Telegram-уведомление о добавлении книги:", error)
 
     return RedirectResponse("/admin?created=1#orders", status_code=303)
 
@@ -1119,14 +1311,237 @@ def admin_delete_book(
         book = db.get(Book, book_id)
 
         if book:
-            for filename in (book.cover, book.file):
-                if filename and Path(filename).name == filename:
-                    (UPLOADS_DIR / filename).unlink(missing_ok=True)
-
-            db.delete(book)
+            book.is_deleted = True
+            db.add(AdminAction(action="book_to_trash", details=f"book_id={book_id}; title={book.title}"))
             db.commit()
 
     return RedirectResponse("/admin?deleted=1", status_code=303)
+
+
+# =========================
+# НАСТРОЙКИ ПОЛЬЗОВАТЕЛЯ
+# =========================
+
+@app.get("/settings", response_class=HTMLResponse)
+def settings_page(request: Request):
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    return render_page(request, "settings.html", {"user": user})
+
+
+@app.post("/settings/appearance")
+async def save_appearance(
+    request: Request,
+    theme: str = Form("light"),
+    accent_color: str = Form("#416d58"),
+    background_mode: str = Form("plain"),
+    font_family: str = Form("sans"),
+    font_size: int = Form(16),
+    line_height: float = Form(1.8),
+    reading_width: str = Form("normal"),
+    card_style: str = Form("classic"),
+    background_image: UploadFile | None = File(None),
+    remove_background: str = Form(""),
+):
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(401, "Войдите в аккаунт")
+    if theme not in ALLOWED_THEMES or background_mode not in ALLOWED_BACKGROUNDS or font_family not in ALLOWED_FONTS or card_style not in ALLOWED_CARD_STYLES or reading_width not in ALLOWED_READING_WIDTHS:
+        raise HTTPException(400, "Некорректная настройка оформления")
+    if not COLOR_RE.fullmatch(accent_color):
+        raise HTTPException(400, "Некорректный цвет акцента")
+    font_size = max(14, min(22, int(font_size)))
+    line_height = max(1.3, min(2.2, float(line_height)))
+    new_image = await store_small_image(background_image)
+    with SessionLocal() as db:
+        pref = db.query(UserAppearance).filter_by(user_id=user.id).first()
+        if pref is None:
+            pref = UserAppearance(user_id=user.id)
+            db.add(pref)
+        old_image = pref.background_image
+        if background_mode == "image" and not new_image and not old_image and remove_background != "1":
+            raise HTTPException(400, "Сначала загрузите фоновую картинку")
+        pref.theme = theme
+        pref.accent_color = accent_color.lower()
+        pref.background_mode = background_mode
+        pref.font_family = font_family
+        pref.font_size = font_size
+        pref.line_height = line_height
+        pref.reading_width = reading_width
+        pref.card_style = card_style
+        if new_image:
+            pref.background_image = new_image
+        if remove_background == "1":
+            pref.background_image = None
+            if background_mode == "image":
+                pref.background_mode = "plain"
+        db.commit()
+    if old_image and (new_image or remove_background == "1"):
+        (UPLOADS_DIR / old_image).unlink(missing_ok=True)
+    return RedirectResponse("/settings?saved=1", status_code=303)
+
+
+@app.post("/settings/profile")
+async def save_profile_visuals(
+    request: Request,
+    avatar: UploadFile | None = File(None),
+    profile_cover: UploadFile | None = File(None),
+):
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(401, "Войдите в аккаунт")
+    avatar_name = await store_small_image(avatar)
+    cover_name = await store_small_image(profile_cover)
+    with SessionLocal() as db:
+        pref = db.query(UserAppearance).filter_by(user_id=user.id).first()
+        if pref is None:
+            pref = UserAppearance(user_id=user.id)
+            db.add(pref)
+        old_avatar, old_cover = pref.avatar, pref.profile_cover
+        if avatar_name:
+            pref.avatar = avatar_name
+        if cover_name:
+            pref.profile_cover = cover_name
+        db.commit()
+    if avatar_name and old_avatar:
+        (UPLOADS_DIR / old_avatar).unlink(missing_ok=True)
+    if cover_name and old_cover:
+        (UPLOADS_DIR / old_cover).unlink(missing_ok=True)
+    return RedirectResponse("/settings?saved=1#profile-visuals", status_code=303)
+
+
+@app.post("/api/preferences/appearance")
+async def update_appearance_api(request: Request):
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(401, "Войдите в аккаунт")
+    data = await request.json()
+    if not isinstance(data, dict):
+        raise HTTPException(400, "Ожидался объект настроек")
+    updates = {}
+    if "theme" in data:
+        if not isinstance(data["theme"], str) or data["theme"] not in ALLOWED_THEMES:
+            raise HTTPException(400, "Неизвестная тема")
+        updates["theme"] = data["theme"]
+    if "accent_color" in data:
+        if not isinstance(data["accent_color"], str) or not COLOR_RE.fullmatch(data["accent_color"]):
+            raise HTTPException(400, "Некорректный цвет")
+        updates["accent_color"] = data["accent_color"].lower()
+    if "background_mode" in data:
+        if not isinstance(data["background_mode"], str) or data["background_mode"] not in ALLOWED_BACKGROUNDS:
+            raise HTTPException(400, "Неизвестный тип фона")
+        updates["background_mode"] = data["background_mode"]
+    if "font_family" in data:
+        if not isinstance(data["font_family"], str) or data["font_family"] not in ALLOWED_FONTS:
+            raise HTTPException(400, "Неизвестный шрифт")
+        updates["font_family"] = data["font_family"]
+    if "font_size" in data:
+        try:
+            updates["font_size"] = max(14, min(22, int(data["font_size"])))
+        except (TypeError, ValueError):
+            raise HTTPException(400, "Некорректный размер текста")
+    if "line_height" in data:
+        try:
+            updates["line_height"] = max(1.3, min(2.2, float(data["line_height"])))
+        except (TypeError, ValueError):
+            raise HTTPException(400, "Некорректный межстрочный интервал")
+    if "reading_width" in data:
+        if not isinstance(data["reading_width"], str) or data["reading_width"] not in ALLOWED_READING_WIDTHS:
+            raise HTTPException(400, "Некорректная ширина текста")
+        updates["reading_width"] = data["reading_width"]
+    if "card_style" in data:
+        if not isinstance(data["card_style"], str) or data["card_style"] not in ALLOWED_CARD_STYLES:
+            raise HTTPException(400, "Неизвестный стиль карточек")
+        updates["card_style"] = data["card_style"]
+    with SessionLocal() as db:
+        pref = db.query(UserAppearance).filter_by(user_id=user.id).first()
+        if pref is None:
+            pref = UserAppearance(user_id=user.id)
+            db.add(pref)
+        for key, value in updates.items():
+            setattr(pref, key, value)
+        db.commit()
+    return {"ok": True}
+
+
+# =========================
+# ГЛОБАЛЬНЫЙ ДИЗАЙН (АДМИНИСТРАТОР)
+# =========================
+
+@app.post("/admin/design")
+async def save_admin_design(
+    _: bool = Depends(require_admin),
+    site_name: str = Form("MY LIBRARY"),
+    hero_eyebrow: str = Form("ВАША КОЛЛЕКЦИЯ ЗНАНИЙ"),
+    hero_title: str = Form("Истории, которые остаются с вами."),
+    hero_subtitle: str = Form("Откройте для себя следующую любимую книгу."),
+    accent_color: str = Form("#416d58"),
+    logo: UploadFile | None = File(None),
+    favicon: UploadFile | None = File(None),
+    hero_background: UploadFile | None = File(None),
+    remove_logo: str = Form(""),
+    remove_favicon: str = Form(""),
+    remove_hero_background: str = Form(""),
+):
+    if not COLOR_RE.fullmatch(accent_color):
+        raise HTTPException(400, "Некорректный фирменный цвет")
+    uploads = {
+        "logo_file": await store_small_image(logo),
+        "favicon_file": await store_small_image(favicon),
+        "hero_background_file": await store_small_image(hero_background),
+    }
+    values = {
+        "site_name": site_name.strip()[:80] or "MY LIBRARY",
+        "hero_eyebrow": hero_eyebrow.strip()[:120],
+        "hero_title": hero_title.strip()[:180],
+        "hero_subtitle": hero_subtitle.strip()[:240],
+        "accent_color": accent_color.lower(),
+    }
+    values.update({key: value for key, value in uploads.items() if value})
+    for flag, key in ((remove_logo, "logo_file"), (remove_favicon, "favicon_file"), (remove_hero_background, "hero_background_file")):
+        if flag == "1":
+            values[key] = ""
+    previous = get_site_config()
+    save_site_values(values)
+    for flag, key in ((remove_logo, "logo_file"), (remove_favicon, "favicon_file"), (remove_hero_background, "hero_background_file")):
+        if flag == "1" and previous.get(key):
+            (UPLOADS_DIR / Path(previous[key]).name).unlink(missing_ok=True)
+    return RedirectResponse("/admin?design_saved=1#design", status_code=303)
+
+
+# Информационные страницы для публичного запуска. Контактные данные и юридические реквизиты
+# владельцу нужно заполнить перед публикацией.
+@app.get("/help", response_class=HTMLResponse)
+def help_page(request: Request):
+    return render_page(request, "info.html", {"page_title": "Помощь", "page_eyebrow": "ПОДДЕРЖКА", "content": [
+        ("Как читать книги?", "Откройте каталог, выберите книгу и нажмите «Читать». Для поддерживаемых форматов откроется читалка."),
+        ("Как настроить сайт под себя?", "Войдите в аккаунт и откройте раздел «Моё оформление»: там можно выбрать тему, цвет, фон, шрифт, размер текста и вид карточек."),
+        ("Как заказать книгу?", "Если нужной книги нет, отправьте заявку через раздел «Стол заказов»."),
+    ]})
+
+@app.get("/privacy", response_class=HTMLResponse)
+def privacy_page(request: Request):
+    return render_page(request, "info.html", {"page_title": "Политика конфиденциальности", "page_eyebrow": "ВАШИ ДАННЫЕ", "content": [
+        ("Какие данные сохраняются?", "Для аккаунта сохраняются имя пользователя, email, хеш пароля, избранное, прогресс чтения и действия, необходимые для работы функций сайта."),
+        ("Для чего используются данные?", "Данные используются для входа, персонализации, сохранения прогресса и работы функций, которые выбрал пользователь."),
+        ("Запросы на удаление данных", "Перед публичным запуском владелец должен указать рабочий контакт для запросов об удалении аккаунта и персональных данных."),
+    ]})
+
+@app.get("/terms", response_class=HTMLResponse)
+def terms_page(request: Request):
+    return render_page(request, "info.html", {"page_title": "Пользовательское соглашение", "page_eyebrow": "ПРАВИЛА БИБЛИОТЕКИ", "content": [
+        ("Использование сервиса", "Пользователь обязуется соблюдать законодательство и не пытаться получить несанкционированный доступ к сайту."),
+        ("Авторские права", "Администратор должен размещать только книги и материалы, распространение которых разрешено правообладателем или законом."),
+        ("Аккаунт и модерация", "Пользователь отвечает за сохранность пароля. Администрация вправе ограничивать доступ при нарушении правил."),
+    ]})
+
+@app.get("/contact", response_class=HTMLResponse)
+def contact_page(request: Request):
+    return render_page(request, "info.html", {"page_title": "Контакты", "page_eyebrow": "СВЯЗАТЬСЯ С НАМИ", "content": [
+        ("Заказ книг", "Воспользуйтесь разделом «Стол заказов», чтобы запросить книгу."),
+        ("Поддержка и правообладатели", "До публикации укажите здесь настоящий email или почтовый адрес поддержки и контакт для вопросов авторских прав."),
+    ]})
 
 
 @app.get("/health")
